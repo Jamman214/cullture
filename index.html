@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Cullture: rate and trim your Spotify songs</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⭐</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700;12..96,800&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <header class="top">
+        <div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="currentColor"
+                    d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4L2.8 9.5l6.4-.8z" />
+            </svg>Cullture</div>
+        <button class="btn" id="switchBtn" hidden>Change playlist</button>
+        <div class="spacer"></div>
+        <button class="btn danger" id="cullBtn" hidden>Cull…</button>
+        <div class="menu-wrap" id="menuWrap" hidden>
+            <button class="icon-btn" id="menuBtn" aria-label="More options" aria-expanded="false"><svg
+                    viewBox="0 0 24 24">
+                    <circle cx="5" cy="12" r="2" fill="currentColor" />
+                    <circle cx="12" cy="12" r="2" fill="currentColor" />
+                    <circle cx="19" cy="12" r="2" fill="currentColor" />
+                </svg></button>
+            <div class="menu" id="menu" hidden>
+                <button data-act="device">Choose playback device</button>
+                <button data-act="reload">Reload songs from Spotify</button>
+                <button data-act="export">Export ratings (JSON)</button>
+                <button data-act="import">Import ratings…</button>
+                <button data-act="signout">Sign out</button>
+                <button data-act="clientid">Change Client ID</button>
+            </div>
+        </div>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+    </header>
+
+    <main>
+        <section id="setup" class="setup" hidden>
+            <h1>Rate your songs, keep the good ones</h1>
+            <p class="lede">Cullture plays through a playlist or your Liked Songs one track at a time so you can give
+                each a 1–5 star rating, then remove the ones you don't want. Ratings and progress are saved in this
+                browser.</p>
+            <div class="warn" id="hostWarn" hidden></div>
+            <ol>
+                <li>Open the <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">Spotify
+                        Developer Dashboard</a> and create an app. Tick <b>Web API</b> and <b>Web Playback SDK</b>.</li>
+                <li>Add this exact Redirect URI to the app settings:
+                    <div class="code"><span id="redirectShow"></span><button class="btn" id="copyRedirect">Copy</button>
+                    </div>
+                </li>
+                <li>Under <b>User Management</b>, add the Spotify account email you'll sign in with. The app owner needs
+                    Spotify Premium.</li>
+                <li>Paste the app's Client ID here:
+                    <div class="field" style="margin-top:6px"><input class="input" id="clientId" placeholder="Client ID"
+                            autocomplete="off" spellcheck="false"><button class="btn primary" id="connectBtn">Connect
+                            Spotify</button></div>
+                </li>
+            </ol>
+        </section>
+
+        <section id="picker" hidden>
+            <h1>Choose what to sort through</h1>
+            <p class="lede">Ratings are stored per song, so a song you rate here shows its rating in every playlist.
+                Spotify only shares the contents of playlists you own or collaborate on.</p>
+            <div class="grid" id="srcGrid"></div>
+        </section>
+
+        <section id="work" hidden>
+            <div class="summary">
+                <div>
+                    <h1 id="srcName"></h1>
+                    <p id="sumLine"></p>
+                </div>
+                <button class="btn primary" id="resumeBtn">Resume</button>
+                <div class="bar" id="bar"></div>
+                <div class="legend" id="legend"></div>
+            </div>
+            <div class="filters">
+                <input type="search" class="input" id="q" placeholder="Search title, artist or album"
+                    aria-label="Search">
+                <div class="seg" id="status" role="group" aria-label="Played status">
+                    <button data-s="all" aria-pressed="true">All</button><button data-s="unplayed"
+                        aria-pressed="false">Not played</button><button data-s="played"
+                        aria-pressed="false">Played</button>
+                </div>
+                <div class="chips" id="chips" role="group" aria-label="Filter by rating"></div>
+                <select class="input" id="sort" aria-label="Sort">
+                    <option value="order">Playlist order</option>
+                    <option value="added">Recently added</option>
+                    <option value="title">Title A–Z</option>
+                    <option value="artist">Artist A–Z</option>
+                    <option value="rdesc">Rating, high to low</option>
+                    <option value="rasc">Rating, low to high</option>
+                    <option value="dur">Longest first</option>
+                </select>
+            </div>
+            <div class="bulk" id="bulk" hidden>
+                <b id="bulkCount"></b>
+                <button class="btn" id="selShown">Select all shown</button>
+                <span>Rate all:</span>
+                <div class="stars" id="bulkStars"></div>
+                <button class="btn" id="bulkClear">Clear ratings</button>
+                <button class="btn" id="bulkPlay">Play selected</button>
+                <button class="btn danger" id="bulkRemove">Remove…</button>
+                <button class="btn" id="bulkNone">Deselect</button>
+            </div>
+            <div class="thead"><input type="checkbox" id="master" aria-label="Select all shown"><span
+                    class="n">#</span><span></span><span>Title</span><span class="al">Album</span><span class="pl-h"
+                    title="Played">▸</span><span class="du">Time</span><span>Rating</span><span></span></div>
+            <div id="list"></div>
+        </section>
+    </main>
+
+    <footer class="deck" id="deck" hidden>
+        <div class="deck-in">
+            <div class="d-art" id="dArt"></div>
+            <div class="d-meta">
+                <div class="d-text">
+                    <div class="d-title" id="dTitle">Nothing playing</div>
+                    <div class="d-artist" id="dArtist">Press Resume or play any song</div>
+                </div>
+                <div class="ctrls">
+                    <button class="icon-btn" id="prevBtn" aria-label="Previous song"><svg viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M6 5h2v14H6zM20 5v14L9 12z" />
+                        </svg></button>
+                    <button class="icon-btn" id="backBtn" aria-label="Back 15 seconds">−15</button>
+                    <button class="icon-btn play" id="playBtn" aria-label="Play"><svg viewBox="0 0 24 24" id="playIcon">
+                            <path fill="currentColor" d="M7 4v16l13-8z" />
+                        </svg></button>
+                    <button class="icon-btn" id="fwdBtn" aria-label="Forward 15 seconds">+15</button>
+                    <button class="icon-btn" id="nextBtn" aria-label="Next song"><svg viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M16 5h2v14h-2zM4 5v14l11-7z" />
+                        </svg></button>
+                </div>
+            </div>
+            <div class="seek"><span id="tCur">0:00</span><input type="range" id="seek" min="0" max="1000" value="0"
+                    aria-label="Seek"><span id="tDur">0:00</span></div>
+            <div class="rate">
+                <div class="stars big" id="dStars"></div><small>Press 1–5 to rate, 0 to clear</small>
+            </div>
+            <div class="opts">
+                <label><input type="checkbox" id="optSkip"> Skip songs already rated</label>
+                <label><input type="checkbox" id="optAdvance"> Go to next song after rating</label>
+                <button class="linkish" id="midBtn">Jump to middle (M)</button>
+                <span class="spacer"></span>
+                <button class="linkish" id="deviceBtn">Playing on: …</button>
+            </div>
+        </div>
+    </footer>
+
+    <dialog id="cullDlg">
+        <h2>Cull <span id="cullName"></span></h2>
+        <p>Review and remove low-rated songs, or save the keepers to a new playlist. Ratings stay saved either way.</p>
+        <section>
+            <div class="field" style="align-items:center">
+                <label for="cullMax">Songs rated</label>
+                <select class="input" id="cullMax" style="flex:0 0 auto;min-width:0;border-radius:999px">
+                    <option value="1">1 star</option>
+                    <option value="2">2 stars or less</option>
+                    <option value="3">3 stars or less</option>
+                </select>
+                <b id="cullCount"></b>
+            </div>
+            <p id="cullNote" style="margin-top:8px"></p>
+            <div class="row-actions">
+                <button class="btn" id="cullReview">Show them in the list</button>
+                <button class="btn danger solid" id="cullGo">Remove</button>
+            </div>
+        </section>
+        <section>
+            <div class="field" style="align-items:center">
+                <label for="keepMin">Save songs rated</label>
+                <select class="input" id="keepMin" style="flex:0 0 auto;min-width:0;border-radius:999px">
+                    <option value="5">5 stars</option>
+                    <option value="4">4 stars or more</option>
+                    <option value="3">3 stars or more</option>
+                </select>
+                <b id="keepCount"></b>
+            </div>
+            <div class="field" style="margin-top:10px"><input class="input" id="keepName"
+                    aria-label="New playlist name"><button class="btn primary" id="keepGo">Create playlist</button>
+            </div>
+        </section>
+        <div class="row-actions"><button class="btn" id="cullClose">Close</button></div>
+    </dialog>
+
+    <dialog id="confirmDlg">
+        <h2 id="cfTitle"></h2>
+        <p id="cfText"></p>
+        <div class="row-actions"><button class="btn" id="cfNo">Cancel</button><button class="btn danger solid"
+                id="cfYes"></button></div>
+    </dialog>
+
+    <dialog id="devDlg">
+        <h2>Where should songs play?</h2>
+        <p>Playing in this browser needs Spotify Premium and a desktop browser. To use your phone or the Spotify app
+            instead, open Spotify there first so it shows up below.</p>
+        <div id="devList"></div>
+        <div class="row-actions"><button class="btn" id="devRefresh">Refresh list</button><button class="btn"
+                id="devClose">Close</button></div>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" hidden></div>
+
+    <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>
