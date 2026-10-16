@@ -32,7 +32,7 @@ export function rowHtml(t: Track): string {
     const r = rOf(t.id);
     const played = playedOf(t.id);
     const sel = S.sel.has(t.id);
-    return `<div class="row${sel ? ' sel' : ''}${S.cur === t.id ? ' cur' : ''}" data-id="${t.id}">
+    return `<div class="row${sel ? ' sel' : ''}${S.pb.cur === t.id ? ' cur' : ''}" data-id="${t.id}">
 <input type="checkbox" class="ck" ${sel ? 'checked' : ''} aria-label="Select ${esc(t.name)}">
 <span class="n">${t.idx + 1}</span>
 <img loading="lazy" src="${esc(t.img)}" alt="">

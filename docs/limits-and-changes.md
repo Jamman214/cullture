@@ -18,6 +18,7 @@
 | A filter or sort option | `computeView` in `list.ts`, plus its control: rating chips in `CHIPS` in `list.ts`, status buttons and sort options in `index.html` |
 | Keyboard shortcuts | `bindKeys` in `main.ts` |
 | What Resume picks | `resumeTarget` in `list.ts` |
+| What playback does when a song ends, or what a button does in each mode | `transition` in `playback.ts` |
 | How far ahead playback queues, or skip rules | `orderFrom` in `player.ts` |
 | Batch sizes or OAuth scopes | `config.ts` |
 | A new Spotify request | Add a function in `spotify.ts` using `api()` |

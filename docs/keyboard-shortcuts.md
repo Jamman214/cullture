@@ -13,3 +13,5 @@ Shortcuts work on the workspace screen, except while typing in the search box or
 | M | Jump to 45% through the song |
 | / | Focus the search box |
 | Esc | Clear the selection |
+
+While waiting for a rating, Space and → do nothing; rate the song, or use ← or M to hear part of it again.

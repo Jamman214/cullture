@@ -31,7 +31,7 @@ function chirp(c: AudioContext): AudioBuffer {
     return buf;
 }
 
-export function startBeeping(): void {
+function startBeeping(): void {
     primeBeeper();
     if (!ctx || loops.size) return;
     const src = ctx.createBufferSource();
@@ -42,8 +42,14 @@ export function startBeeping(): void {
     loops.add(src);
 }
 
+/** Beeps while `on`. Safe to call repeatedly; the player calls it on every redraw. */
+export function setBeeping(on: boolean): void {
+    if (on) startBeeping();
+    else stopBeeping();
+}
+
 /** Stops every beep, whatever state the app thinks it's in. */
-export function stopBeeping(): void {
+function stopBeeping(): void {
     for (const src of loops) {
         try { src.stop(); } catch { /* already stopped */ }
         src.disconnect();

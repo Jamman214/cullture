@@ -16,10 +16,16 @@ Each module owns one concern. Spotify network code sits in three files, and only
 | `src/api.ts` | Web API client: retries, refresh on 401, waits on 429 | `api`, `SpotifyError` |
 | `src/spotify.ts` | Reading playlists and songs, removing songs, creating playlists, devices | `getSources`, `getTracks`, `removeFromSource` |
 | `src/list.ts` | Song list: filtering, sorting, rows, selection, progress summary | `renderList`, `updateRow`, `toggleSel` |
-| `src/player.ts` | Playback, play order, player bar, device dialog | `playFrom`, `goNext`, `rateCurrent`, `loadSDK` |
+| `src/playback.ts` | The playback state machine: every rule about what playback does next | `transition`, `Playback` |
+| `src/player.ts` | Runs the state machine, talks to Spotify's player, draws the player bar, device dialog | `dispatch`, `playSong`, `togglePlay`, `rateCurrent` |
+| `src/beeper.ts` | The reminder beep for **Wait for a rating** | `setBeeping`, `primeBeeper` |
+| `src/cache.ts` | Saved copies of playlists' songs | `loadCached`, `saveCached`, `isStale` |
 | `src/views.ts` | Switching screens, setup screen, playlist picker, opening a playlist | `show`, `renderPicker`, `openSource` |
 | `src/cull.ts` | Cull dialog, confirm dialog, keepers playlist, ratings export and import | `openCull`, `removeTracks`, `exportRatings` |
-| `vite.config.ts` | Dev server address and port, relative build paths | — |
+| `src/mock/data.ts` | The test library for test mode: songs, playlists, covers | `buildLibrary` |
+| `src/mock/server.ts` | Simulated Spotify Web API and playback for test mode | `mockFetch` |
+| `src/env.d.ts` | Declares the build-time `__MOCK__` flag | — |
+| `vite.config.ts` | Dev server address and port, relative build paths, test mode flag | — |
 | `tsconfig.json` | Strict TypeScript settings, Spotify SDK types | — |
 
 ## Module dependencies
@@ -53,6 +59,9 @@ flowchart TD
         util["util.ts<br/>Helpers"]
         config["config.ts<br/>Settings"]
         types["types.ts<br/>Types"]
+        playback["playback.ts<br/>Playback rules"]
+        beeper["beeper.ts<br/>Reminder beep"]
+        cache["cache.ts<br/>Saved playlists"]
     end
 
     main --> features
@@ -61,5 +70,7 @@ flowchart TD
 ```
 
 `main.ts` imports from every other module. Within the features layer, `views.ts` and `cull.ts` use `player.ts` and `list.ts`, and `player.ts` uses `list.ts`; `list.ts` imports nothing from Spotify. `player.ts` and `views.ts` also import from `api.ts` and `auth.ts` directly: `player.ts` for playback requests and the browser player's token, `views.ts` for error messages and the saved Client ID. `cull.ts` uses `api.ts`'s error helpers too.
+
+`playback.ts` imports nothing at all: it's pure logic that `player.ts` runs.
 
 To keep it this way, lower modules report back rather than reach up. For example, `markPlayed` in `state.ts` returns whether a song is newly played, and the caller decides what to redraw.

@@ -1,18 +1,18 @@
 import './styles.css';
 import { messageOf } from './api';
 import { SignedOutError, getClientId, handleRedirect, hasToken, login, setClientId, signOut } from './auth';
-import { primeBeeper } from './beeper';
 import { KEY, MOCK, MOCK_DEVICE, REDIRECT } from './config';
 import { exportRatings, importRatings, openCull, refreshCull, removeTracks, reviewCull, cullIds, saveKeepers } from './cull';
 import { renderList, renderSummary, resumeTarget, syncSelDom, toggleSel, updateRow } from './list';
 import {
-    curPos, goNext, goPrev, loadSDK, openDevices, playFrom, rateCurrent, renderDeck, renderSeek, seekTo, setDevice, stopWaiting, togglePlay
+    goNext, goPrev, loadSDK, openDevices, playSong, prefsChanged, rateCurrent, ratingsChanged, renderDeck,
+    seekBy, seekToFraction, setDevice, setDragging, togglePlay
 } from './player';
 import { S, flushRatings, rOf, saveOpts, setRating } from './state';
 import { getMe, getSources } from './spotify';
 import { toast } from './toast';
 import type { SortKey, StatusFilter } from './types';
-import { $, LS, esc, fmt, plural, starsHtml } from './util';
+import { $, LS, esc, plural, starsHtml } from './util';
 import { downloadSource, openSource, renderPicker, show, showSetup } from './views';
 
 /** Rates many songs at once, with an undo. */
@@ -21,7 +21,7 @@ function bulkRate(ids: string[], r: number | null): void {
     setRating(ids, r);
     S.sel.clear();
     renderList();
-    renderDeck();
+    ratingsChanged(ids);
     toast(r ? `Rated ${plural(ids.length, 'song')} ${r}★` : `Cleared ratings on ${plural(ids.length, 'song')}`, {
         undo: () => {
             for (const [id, old] of prev) setRating([id], old || null);
@@ -125,7 +125,7 @@ function bindFilters(): void {
     };
     $('#resumeBtn').onclick = () => {
         const t = resumeTarget();
-        if (t) { S.queue = null; void playFrom(t.id); }
+        if (t) { S.queue = null; void playSong(t.id); }
     };
 }
 
@@ -141,17 +141,17 @@ function bindList(): void {
             setRating([id], rOf(id) === v ? null : v);
             updateRow(id);
             renderSummary();
-            if (id === S.cur) renderDeck();
+            ratingsChanged([id]);
             return;
         }
-        if (closest(e, '.pbtn')) { S.queue = null; void playFrom(id); return; }
+        if (closest(e, '.pbtn')) { S.queue = null; void playSong(id); return; }
         const target = e.target as HTMLElement;
         if (target.classList.contains('ck')) { toggleSel(id, (target as HTMLInputElement).checked, e.shiftKey); return; }
         toggleSel(id, !S.sel.has(id), e.shiftKey);
     });
     list.addEventListener('dblclick', e => {
         const id = closest(e, '.row')?.dataset.id;
-        if (id && !closest(e, 'button,input')) { S.queue = null; void playFrom(id); }
+        if (id && !closest(e, 'button,input')) { S.queue = null; void playSong(id); }
     });
     $<HTMLInputElement>('#master').onchange = e => {
         const on = (e.target as HTMLInputElement).checked;
@@ -175,35 +175,33 @@ function bindBulk(): void {
         S.queue = [...S.sel].sort((a, b) => (order.get(a) ?? 1e9) - (order.get(b) ?? 1e9));
         const first = S.queue.find(id => !(S.opts.skipRated && rOf(id))) || S.queue[0];
         toast(`Playing ${plural(S.queue.length, 'selected song')} in order.`);
-        void playFrom(first);
+        void playSong(first);
     };
     $('#bulkRemove').onclick = () => { void removeTracks([...S.sel]); };
 }
 
 function bindDeck(): void {
-    $('#playBtn').onclick = () => { void togglePlay(); };
+    $('#playBtn').onclick = togglePlay;
     $('#nextBtn').onclick = goNext;
     $('#prevBtn').onclick = goPrev;
-    $('#fwdBtn').onclick = () => { void seekTo(curPos() + 15000); };
-    $('#backBtn').onclick = () => { void seekTo(curPos() - 15000); };
+    $('#fwdBtn').onclick = () => seekBy(15000);
+    $('#backBtn').onclick = () => seekBy(-15000);
     $('#dStars').onclick = e => {
         const s = closest(e, '.star');
         if (!s) return;
         const v = Number(s.dataset.v);
-        rateCurrent(rOf(S.cur) === v ? null : v);
+        rateCurrent(rOf(S.pb.cur) === v ? null : v);
     };
     const seek = $<HTMLInputElement>('#seek');
-    seek.oninput = () => { S.dragging = true; $('#tCur').textContent = fmt((Number(seek.value) / 1000) * S.dur); };
-    seek.onchange = () => { S.dragging = false; void seekTo((Number(seek.value) / 1000) * S.dur); };
+    seek.oninput = () => setDragging(true);
+    seek.onchange = () => { setDragging(false); seekToFraction(Number(seek.value) / 1000); };
     $<HTMLInputElement>('#optSkip').onchange = e => { S.opts.skipRated = (e.target as HTMLInputElement).checked; saveOpts(); };
     $<HTMLInputElement>('#optAdvance').onchange = e => { S.opts.autoAdvance = (e.target as HTMLInputElement).checked; saveOpts(); };
     $<HTMLInputElement>('#optWait').onchange = e => {
         S.opts.waitForRating = (e.target as HTMLInputElement).checked;
         saveOpts();
-        if (S.opts.waitForRating) primeBeeper(); // unlock sound now, while there's a click
-        else stopWaiting();
+        prefsChanged();
     };
-    setInterval(() => { if (S.playing) renderSeek(); }, 500);
 }
 
 function bindDialogs(): void {
@@ -213,7 +211,7 @@ function bindDialogs(): void {
         if (!b?.dataset.id) return;
         setDevice(b.dataset.id, b.dataset.name);
         dev.close();
-        if (S.cur) void playFrom(S.cur);
+        if (S.pb.cur) void playSong(S.pb.cur);
     };
     $('#devRefresh').onclick = () => { dev.close(); setTimeout(() => { void openDevices(); }, 0); };
     $('#devClose').onclick = () => dev.close();
@@ -238,11 +236,11 @@ function bindKeys(): void {
         if (e.key === '/') { e.preventDefault(); $('#q').focus(); return; }
         if (/^[1-5]$/.test(e.key)) { e.preventDefault(); rateCurrent(Number(e.key)); return; }
         if (e.key === '0' || e.key === 'Backspace') { e.preventDefault(); rateCurrent(null); return; }
-        if (e.key === ' ' && t.tagName !== 'BUTTON') { e.preventDefault(); void togglePlay(); return; }
-        if (e.key === 'ArrowRight') { e.preventDefault(); if (e.shiftKey) goNext(); else void seekTo(curPos() + 15000); return; }
-        if (e.key === 'ArrowLeft') { e.preventDefault(); if (e.shiftKey) goPrev(); else void seekTo(curPos() - 15000); return; }
+        if (e.key === ' ' && t.tagName !== 'BUTTON') { e.preventDefault(); togglePlay(); return; }
+        if (e.key === 'ArrowRight') { e.preventDefault(); if (e.shiftKey) goNext(); else seekBy(15000); return; }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); if (e.shiftKey) goPrev(); else seekBy(-15000); return; }
         if (e.key.toLowerCase() === 'n') goNext();
-        if (e.key.toLowerCase() === 'm') void seekTo(S.dur * 0.45);
+        if (e.key.toLowerCase() === 'm') seekToFraction(0.45);
         if (e.key === 'Escape' && S.sel.size) { S.sel.clear(); syncSelDom(); }
     });
 }

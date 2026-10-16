@@ -1285,12 +1285,6 @@ dialog .row-actions {
     font-weight: 700
 }
 
-.ctrls .icon-btn:disabled {
-    opacity: .35;
-    cursor: not-allowed;
-    background: none
-}
-
 .ctrls .play:disabled {
     opacity: .35;
     cursor: not-allowed;
@@ -1302,4 +1296,11 @@ dialog .row-actions {
     .deck.waiting .big .star svg {
         animation: none
     }
+}
+
+/* Disabled transport buttons (e.g. +15 while waiting for a rating) */
+.ctrls .icon-btn:not(.play):disabled {
+    opacity: .35;
+    cursor: not-allowed;
+    background: none
 }

@@ -1,11 +1,11 @@
 /** Screen switching: setup, playlist picker, and the rating workspace. */
 import { messageOf, statusOf } from './api';
 import { getClientId } from './auth';
-import { cacheMeta, isStale, loadCached, saveCached } from './cache';
 import { KEY, REDIRECT } from './config';
 import { renderList } from './list';
 import { renderDeck } from './player';
 import { S, setTracks } from './state';
+import { cacheMeta, isStale, loadCached, saveCached } from './cache';
 import { getTracks } from './spotify';
 import { toast } from './toast';
 import type { Source, Track } from './types';

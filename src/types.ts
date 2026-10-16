@@ -22,6 +22,7 @@ export interface Source {
     owner?: string;
     readable: boolean;
     editable: boolean;
+    /** Spotify's version ID for the playlist; changes whenever it's edited. */
     snapshot?: string | null;
 }
 
@@ -46,8 +47,9 @@ export interface Filter {
 
 export interface Opts {
     skipRated: boolean;
-    autoAdvance: boolean;
+    /** Stop at the end of each unrated song and beep until it's rated. */
     waitForRating: boolean;
+    autoAdvance: boolean;
 }
 
 export interface PlayerSnapshot {

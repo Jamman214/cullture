@@ -1,4 +1,5 @@
 import { KEY } from './config';
+import { type Playback, initialPlayback } from './playback';
 import { toast } from './toast';
 import type { Filter, Opts, Ratings, Source, Track, SpotifyUser } from './types';
 import { LS } from './util';
@@ -17,18 +18,8 @@ export interface AppState {
     filter: Filter;
     ratings: Ratings;
     opts: Opts;
-    cur: string | null;
-    /** True while stopped at the end of a song, beeping for a rating. */
-    waiting: boolean;
-    /** The song whose end has already been handled, so it isn't handled twice. */
-    endedFor: string | null;
-    /** True when Spotify was given only the current song, so the app must start the next one itself. */
-    queuedAlone: boolean;
-    playing: boolean;
-    pos: number;
-    dur: number;
-    posAt: number;
-    dragging: boolean;
+    /** Everything about playback. Changed only through dispatch() in player.ts. */
+    pb: Playback;
     sdk: Spotify.Player | null;
     sdkDevice: string | null;
     deviceId: string | null;
@@ -42,7 +33,7 @@ export const S: AppState = {
     filter: { q: '', status: 'all', ratings: new Set(), sort: 'order' },
     ratings: LS.get<Ratings>(KEY.ratings, {}),
     opts: { skipRated: true, autoAdvance: true, waitForRating: false, ...LS.get<Partial<Opts>>(KEY.opts, {}) },
-    cur: null, waiting: false, endedFor: null, queuedAlone: false, playing: false, pos: 0, dur: 0, posAt: 0, dragging: false,
+    pb: initialPlayback,
     sdk: null, sdkDevice: null, deviceId: LS.get<string | null>(KEY.device, null), deviceName: null, pollTimer: null
 };
 

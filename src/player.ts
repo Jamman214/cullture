@@ -1,9 +1,16 @@
-/** Playback: the Web Playback SDK (this browser) or remote control of another Spotify device. */
+/**
+ * Playback: runs the state machine in playback.ts, carries out the effects it asks for
+ * (Spotify requests, marking songs played...), and draws the player bar from its state.
+ *
+ * Nothing here changes playback state directly. Buttons, keys, Spotify reports and a
+ * timer all send events to `dispatch`, which asks the machine for the new state.
+ */
 import { api, messageOf, statusOf } from './api';
 import { getToken } from './auth';
-import { primeBeeper, startBeeping, stopBeeping } from './beeper';
+import { primeBeeper, setBeeping } from './beeper';
 import { KEY, SDK_URL } from './config';
 import { renderSummary, resumeTarget, rowEl, updateRow } from './list';
+import { type Context, type Effect, type PlaybackEvent, position, transition } from './playback';
 import { S, markPlayed, rOf, setRating } from './state';
 import { getDevices } from './spotify';
 import { toast } from './toast';
@@ -11,6 +18,156 @@ import type { PlayerSnapshot, SpotifyPlaybackState } from './types';
 import { $, LS, PAUSE_PATH, PLAY_PATH, esc, fmt, starsHtml } from './util';
 
 const usingSdk = () => !!S.sdk && S.deviceId === S.sdkDevice;
+
+/* ---------- The machine ---------- */
+
+/** Play order: the play-selected list if set, otherwise the list as currently shown. */
+const baseOrder = () => (S.queue?.length ? S.queue : S.view.map(t => t.id));
+
+/** The song ids to play starting at `id`, skipping already-rated songs if that option is on. */
+function orderFrom(id: string): string[] {
+    let base = baseOrder();
+    if (!base.includes(id)) base = S.tracks.map(t => t.id);
+    const rest = base.slice(base.indexOf(id) + 1).filter(x => !(S.opts.skipRated && rOf(x)));
+    return [id, ...rest];
+}
+
+/** Everything the machine needs to know about the rest of the app, as of now. */
+const context = (): Context => ({
+    now: Date.now(),
+    waitForRating: S.opts.waitForRating,
+    isRated: id => !!rOf(id),
+    duration: id => S.byId.get(id)?.dur ?? 0,
+    next: id => (id ? orderFrom(id)[1] : resumeTarget()?.id) ?? null,
+    prev: id => {
+        let base = baseOrder();
+        if (!base.includes(id)) base = S.tracks.map(t => t.id);
+        const i = base.indexOf(id);
+        return i > 0 ? base[i - 1] : null;
+    }
+});
+
+/** The one place playback state changes. */
+export function dispatch(event: PlaybackEvent): void {
+    const before = S.pb;
+    const [after, effects] = transition(before, event, context());
+    S.pb = after;
+    for (const fx of effects) run(fx);
+    if (after !== before) {
+        if (after.cur !== before.cur) {
+            updateRow(before.cur);
+            updateRow(after.cur);
+            if (after.cur) rowEl(after.cur)?.scrollIntoView({ block: 'nearest' });
+        }
+        renderDeck();
+    }
+}
+
+function run(fx: Effect): void {
+    switch (fx.kind) {
+        case 'play': void sendPlay(fx.id, fx.alone, fx.position); break;
+        case 'pause': void control(() => S.sdk!.pause(), '/me/player/pause'); break;
+        case 'resume': void control(() => S.sdk!.resume(), '/me/player/play', {}, 'Couldn\'t resume playback'); break;
+        case 'seek': void control(() => S.sdk!.seek(Math.round(fx.ms)), '/me/player/seek', { position_ms: Math.round(fx.ms) }); break;
+        case 'played': if (markPlayed(fx.id)) renderSummary(); break;
+        case 'toast': toast(fx.text); break;
+        case 'later': setTimeout(() => dispatch(fx.event), fx.ms); break;
+    }
+}
+
+async function sendPlay(id: string, alone: boolean, positionMs: number): Promise<void> {
+    if (!S.deviceId) {
+        dispatch({ type: 'failed', message: 'Choose where to play first.' });
+        void openDevices();
+        return;
+    }
+    void S.sdk?.activateElement();
+    const ids = alone ? [id] : orderFrom(id).slice(0, 50); // Spotify plays these in order by itself
+    const uris = ids.map(x => S.byId.get(x)?.uri).filter((u): u is string => !!u);
+    try {
+        await api('/me/player/play', { method: 'PUT', query: { device_id: S.deviceId }, body: { uris, position_ms: Math.round(positionMs) } });
+    } catch (e) {
+        const s = statusOf(e);
+        if (s === 404) {
+            setDevice(null);
+            dispatch({ type: 'failed', message: 'That playback device isn\'t available. Pick another.' });
+            void openDevices();
+        } else {
+            dispatch({ type: 'failed', message: s === 403 ? 'Spotify refused playback. Playback control needs Spotify Premium.' : 'Couldn\'t start playback: ' + messageOf(e) });
+        }
+    }
+}
+
+/** Pause, resume or seek, through the browser player or the Web API. `failMessage` reports errors. */
+async function control(viaSdk: () => Promise<void>, path: string, query: Record<string, number> = {}, failMessage?: string): Promise<void> {
+    try {
+        if (usingSdk()) await viaSdk();
+        else await api(path, { method: 'PUT', query: { ...query, device_id: S.deviceId ?? '' } });
+    } catch (e) {
+        if (failMessage) dispatch({ type: 'failed', message: `${failMessage}: ${messageOf(e)}` });
+    }
+}
+
+// Four times a second: let the machine notice a song ending, and move the seek bar.
+setInterval(() => {
+    dispatch({ type: 'tick' });
+    if (S.pb.mode === 'playing') renderSeek();
+}, 250);
+
+/* ---------- Actions for the rest of the app ---------- */
+
+export async function playSong(id: string): Promise<void> {
+    if (!S.byId.has(id)) return;
+    if (!S.deviceId) {
+        await openDevices();
+        if (!S.deviceId) return;
+    }
+    primeBeeper(); // sound is only allowed after a click, so unlock it now
+    dispatch({ type: 'play', id });
+}
+
+export const togglePlay = () => { primeBeeper(); dispatch({ type: 'toggle' }); };
+export const goNext = () => dispatch({ type: 'next' });
+export const goPrev = () => dispatch({ type: 'prev' });
+export const curPos = () => position(S.pb, Date.now());
+export const seekTo = (ms: number) => dispatch({ type: 'seek', ms });
+export const seekBy = (deltaMs: number) => seekTo(curPos() + deltaMs);
+export const seekToFraction = (f: number) => seekTo(S.pb.dur * f);
+export const prefsChanged = () => { primeBeeper(); dispatch({ type: 'prefsChanged' }); };
+
+/** Rates the current song from the player bar or a number key. */
+export function rateCurrent(r: number | null): void {
+    const id = S.pb.cur;
+    if (!id) return;
+    setRating([id], r);
+    updateRow(id);
+    renderSummary();
+    renderDeck();
+    const st = $('#dStars');
+    st.classList.remove('pop');
+    void st.offsetWidth; // restart the animation
+    st.classList.add('pop');
+    dispatch({ type: 'rated', id, advance: !!r && S.opts.autoAdvance });
+}
+
+/** Call after ratings change some other way (list stars, the bulk bar). */
+export function ratingsChanged(ids: string[]): void {
+    const id = S.pb.cur;
+    if (!id || !ids.includes(id)) return;
+    renderDeck();
+    dispatch({ type: 'rated', id, advance: false });
+}
+
+/* ---------- Spotify ---------- */
+
+/** Turns a Spotify report into an event, matching the song to the open list. */
+function report({ id, uri, linked, paused, pos, dur }: PlayerSnapshot): void {
+    // Spotify may relink a song to a regional copy with a different id, so fall back to linked id and URI.
+    const tid = id && S.byId.has(id) ? id
+        : linked && S.byId.has(linked) ? linked
+            : [...S.byId.values()].find(t => t.uri === uri)?.id;
+    dispatch({ type: 'spotify', id: tid ?? null, paused, pos: pos || 0, dur: dur || 0 });
+}
 
 export function loadSDK(): Promise<boolean> {
     return new Promise(resolve => {
@@ -41,7 +198,7 @@ export function loadSDK(): Promise<boolean> {
             p.addListener('player_state_changed', st => {
                 if (!st || S.deviceId !== S.sdkDevice) return;
                 const ct = st.track_window?.current_track;
-                applyState({ id: ct?.id, uri: ct?.uri, linked: ct?.linked_from?.id, paused: st.paused, pos: st.position, dur: st.duration });
+                report({ id: ct?.id, uri: ct?.uri, linked: ct?.linked_from?.id, paused: st.paused, pos: st.position, dur: st.duration });
             });
             p.connect();
         };
@@ -71,244 +228,46 @@ async function poll(): Promise<void> {
         const st = await api<SpotifyPlaybackState | null>('/me/player');
         if (!st?.item) return;
         if (st.device?.id && st.device.id !== S.deviceId) return;
-        applyState({ id: st.item.id, uri: st.item.uri, paused: !st.is_playing, pos: st.progress_ms ?? 0, dur: st.item.duration_ms });
-    } catch { /* try again next tick */ }
+        report({ id: st.item.id, uri: st.item.uri, paused: !st.is_playing, pos: st.progress_ms ?? 0, dur: st.item.duration_ms });
+    } catch { /* try again next time */ }
 }
 
-function onTrackStarted(id: string): void {
-    if (markPlayed(id)) renderSummary();
-}
+/* ---------- Drawing the player bar ---------- */
 
-export function applyState({ id, uri, linked, paused, pos, dur }: PlayerSnapshot): void {
-    // Spotify may relink a song to a regional copy with a different id, so fall back to linked id and URI.
-    const tid = id && S.byId.has(id) ? id
-        : linked && S.byId.has(linked) ? linked
-            : [...S.byId.values()].find(t => t.uri === uri)?.id;
-    // Spotify reporting "paused" right as the song should be finishing means it ended.
-    if (paused && (!tid || tid === S.cur) && checkEnded(2000)) return;
-    if (tid && tid !== S.cur) {
-        const old = S.cur;
-        S.cur = tid;
-        onTrackStarted(tid);
-        updateRow(old);
-        updateRow(tid);
-        rowEl(tid)?.scrollIntoView({ block: 'nearest' });
-    }
-    S.playing = !paused;
-    S.pos = pos || 0;
-    S.dur = dur || (S.cur ? S.byId.get(S.cur)?.dur : 0) || 0;
-    S.posAt = Date.now();
-    renderDeck();
-}
-
-const baseOrder = () => (S.queue?.length ? S.queue : S.view.map(t => t.id));
-
-/** The song ids to play starting at `id`, skipping already-rated songs if that option is on. */
-function orderFrom(id: string): string[] {
-    let base = baseOrder();
-    if (!base.includes(id)) base = S.tracks.map(t => t.id);
-    const rest = base.slice(base.indexOf(id) + 1).filter(x => !(S.opts.skipRated && rOf(x)));
-    return [id, ...rest];
-}
-
-export async function playFrom(id: string): Promise<void> {
-    const t = S.byId.get(id);
-    if (!t) return;
-    stopWaiting();
-    S.endedFor = null;
-    primeBeeper();
-    if (!S.deviceId) {
-        await openDevices();
-        if (!S.deviceId) return;
-    }
-    void S.sdk?.activateElement();
-    const old = S.cur;
-    S.cur = id;
-    onTrackStarted(id);
-    updateRow(old);
-    updateRow(id);
-    S.pos = 0; S.dur = t.dur; S.posAt = Date.now(); S.playing = true;
-    renderDeck();
-
-    // Hand Spotify the next 50 songs so it keeps going on its own.
-    // When waiting for ratings, queue just this song so Spotify can't move on by itself.
-    S.queuedAlone = S.opts.waitForRating;
-    const ids = S.queuedAlone ? [id] : orderFrom(id).slice(0, 50);
-    const uris = ids.map(x => S.byId.get(x)!.uri);
-    try {
-        await api('/me/player/play', { method: 'PUT', query: { device_id: S.deviceId! }, body: { uris } });
-    } catch (e) {
-        S.playing = false;
-        renderDeck();
-        const s = statusOf(e);
-        if (s === 404) { toast('That playback device isn\'t available. Pick another.'); setDevice(null); void openDevices(); }
-        else if (s === 403) toast('Spotify refused playback. Playback control needs Spotify Premium.');
-        else toast('Couldn\'t start playback: ' + messageOf(e));
-    }
-}
-
-function nextId(): string | undefined {
-    if (!S.cur) return resumeTarget()?.id;
-    return orderFrom(S.cur)[1];
-}
-
-function prevId(): string | null {
-    let base = baseOrder();
-    if (!S.cur) return null;
-    if (!base.includes(S.cur)) base = S.tracks.map(t => t.id);
-    const i = base.indexOf(S.cur);
-    return i > 0 ? base[i - 1] : null;
-}
-
-export function goNext(): void {
-    const n = nextId();
-    if (n) void playFrom(n);
-    else toast('End of the list. Everything shown here is rated.');
-}
-
-export function goPrev(): void {
-    const p = prevId();
-    if (p) void playFrom(p);
-}
-
-export async function togglePlay(): Promise<void> {
-    if (S.waiting) return; // rate the song, or seek, to carry on
-    primeBeeper();
-    // The current song already finished (e.g. the preference was turned off while waiting): play the next one.
-    if (!S.playing && S.cur && S.endedFor === S.cur) { goNext(); return; }
-    if (!S.cur) {
-        const t = resumeTarget();
-        if (t) void playFrom(t.id);
-        return;
-    }
-    try {
-        if (usingSdk()) {
-            await S.sdk!.activateElement();
-            await S.sdk!.togglePlay();
-        } else {
-            await api(S.playing ? '/me/player/pause' : '/me/player/play', { method: 'PUT', query: { device_id: S.deviceId ?? '' } });
-            S.playing = !S.playing;
-            S.posAt = Date.now();
-            renderDeck();
-        }
-    } catch (e) {
-        toast('Playback control failed: ' + messageOf(e));
-    }
-}
-
-export const curPos = () => Math.min(S.dur, S.pos + (S.playing ? Date.now() - S.posAt : 0));
-
-export async function seekTo(ms: number): Promise<void> {
-    if (!S.cur) return;
-    ms = Math.max(0, Math.min(S.dur - 1000, ms));
-    // While waiting the song is already at its end, so skipping forward has nowhere to go.
-    if (S.waiting && ms >= S.dur - 1000) return;
-    // Seeking while waiting for a rating means "let me hear that again": stop beeping and play from there.
-    const resume = S.waiting;
-    if (resume) { stopWaiting(); S.endedFor = null; S.playing = true; }
-    S.pos = ms;
-    S.posAt = Date.now();
-    if (resume) renderDeck(); else renderSeek();
-    try {
-        // Restarting the song at the new position works even if Spotify has already finished it.
-        if (resume) await api('/me/player/play', { method: 'PUT', query: { device_id: S.deviceId ?? '' }, body: { uris: [S.byId.get(S.cur)!.uri], position_ms: Math.round(ms) } });
-        else if (usingSdk()) await S.sdk!.seek(Math.round(ms));
-        else await api('/me/player/seek', { method: 'PUT', query: { position_ms: Math.round(ms), device_id: S.deviceId ?? '' } });
-    } catch { /* ignore */ }
-}
-
-export function rateCurrent(r: number | null): void {
-    if (!S.cur) return;
-    const wasWaiting = S.waiting && !!r;
-    if (wasWaiting) stopWaiting();
-    setRating([S.cur], r);
-    updateRow(S.cur);
-    renderSummary();
-    renderDeck();
-    const st = $('#dStars');
-    st.classList.remove('pop');
-    void st.offsetWidth; // restart the animation
-    st.classList.add('pop');
-    if (r && (S.opts.autoAdvance || wasWaiting)) setTimeout(goNext, 300);
-}
-
-/* ---------- Waiting for a rating ---------- */
 const TITLE = document.title;
-let hint = '';
+let dragging = false;
 
-function startWaiting(): void {
-    S.waiting = true;
-    startBeeping();
-    $('#deck').classList.add('waiting');
-    $<HTMLButtonElement>('#playBtn').disabled = true;
-    $<HTMLButtonElement>('#fwdBtn').disabled = true;
-    const small = $('.rate small');
-    hint ||= small.textContent || '';
-    small.textContent = 'Rate this song to continue';
-    document.title = '⭐ Rate to continue · ' + TITLE;
+/** The seek bar is being dragged, so don't move it under the pointer. */
+export function setDragging(on: boolean): void {
+    dragging = on;
+    if (on) $('#tCur').textContent = fmt((Number($<HTMLInputElement>('#seek').value) / 1000) * S.pb.dur);
 }
 
-export function stopWaiting(): void {
-    stopBeeping();
-    if (!S.waiting) return;
-    S.waiting = false;
-    $('#deck').classList.remove('waiting');
-    $<HTMLButtonElement>('#playBtn').disabled = false;
-    $<HTMLButtonElement>('#fwdBtn').disabled = false;
-    if (hint) $('.rate small').textContent = hint;
-    document.title = TITLE;
-}
-
-async function pausePlayback(): Promise<void> {
-    try {
-        if (usingSdk()) await S.sdk!.pause();
-        else await api('/me/player/pause', { method: 'PUT', query: { device_id: S.deviceId ?? '' } });
-    } catch { /* already stopped */ }
-}
-
-/**
- * With "wait for a rating" on, handles the current song reaching its end (within `margin` ms):
- * a rated song moves on, an unrated one stops and beeps. Returns true if it handled the end.
- */
-function checkEnded(margin: number): boolean {
-    if (!S.cur || !S.playing || !S.dur || S.endedFor === S.cur) return false;
-    // Only needed with the preference on, or when the song was queued alone and Spotify won't move on itself.
-    if (!S.opts.waitForRating && !S.queuedAlone) return false;
-    if (curPos() < S.dur - margin) return false;
-    S.endedFor = S.cur;
-    if (!S.opts.waitForRating || rOf(S.cur)) { goNext(); return true; }
-    S.playing = false;
-    S.pos = S.dur;
-    S.posAt = Date.now();
-    renderDeck();
-    void pausePlayback();
-    startWaiting();
-    return true;
-}
-
-// Checks four times a second for a song ending, and for a rating given another way
-// (a star in the list, or the bulk bar) while waiting.
-setInterval(() => {
-    checkEnded(400);
-    if (S.waiting && rOf(S.cur)) { stopWaiting(); goNext(); }
-}, 250);
-
+/** Draws the player bar from the playback state. Safe to call any time. */
 export function renderDeck(): void {
-    const t = S.cur ? S.byId.get(S.cur) : undefined;
+    const { mode, cur } = S.pb;
+    const t = cur ? S.byId.get(cur) : undefined;
+    const waiting = mode === 'waiting';
+
     $('#dArt').style.backgroundImage = t?.big ? `url('${t.big}')` : '';
     $('#dTitle').textContent = t ? t.name : 'Nothing playing';
     $('#dArtist').textContent = t ? t.artists : 'Press Resume or play any song';
-    const r = t ? rOf(t.id) : 0;
 
-    // render stars
+    // Build the stars once, then only switch colours, so hover and transitions aren't interrupted.
+    const r = t ? rOf(t.id) : 0;
     const st = $('#dStars');
     if (!st.children.length) st.innerHTML = starsHtml(r);
     st.dataset.r = String(r);
-    st.querySelectorAll<HTMLElement>('.star').forEach(b =>
-        b.classList.toggle('on', r >= Number(b.dataset.v)));
+    st.querySelectorAll<HTMLElement>('.star').forEach(b => b.classList.toggle('on', r >= Number(b.dataset.v)));
 
-    $('#playIcon').innerHTML = S.playing ? PAUSE_PATH : PLAY_PATH;
-    $('#playBtn').setAttribute('aria-label', S.playing ? 'Pause' : 'Play');
+    $('#playIcon').innerHTML = mode === 'playing' ? PAUSE_PATH : PLAY_PATH;
+    $('#playBtn').setAttribute('aria-label', mode === 'playing' ? 'Pause' : 'Play');
+    $<HTMLButtonElement>('#playBtn').disabled = waiting;
+    $<HTMLButtonElement>('#fwdBtn').disabled = waiting;
+    $('#deck').classList.toggle('waiting', waiting);
+    document.title = waiting ? '⭐ Rate to continue · ' + TITLE : TITLE;
+    setBeeping(waiting);
+
     $<HTMLInputElement>('#optSkip').checked = S.opts.skipRated;
     $<HTMLInputElement>('#optAdvance').checked = S.opts.autoAdvance;
     $<HTMLInputElement>('#optWait').checked = S.opts.waitForRating;
@@ -316,12 +275,15 @@ export function renderDeck(): void {
 }
 
 export function renderSeek(): void {
-    if (S.dragging) return;
+    if (dragging) return;
     const p = curPos();
+    const dur = S.pb.dur;
     $('#tCur').textContent = fmt(p);
-    $('#tDur').textContent = fmt(S.dur);
-    $<HTMLInputElement>('#seek').value = String(S.dur ? Math.round((p / S.dur) * 1000) : 0);
+    $('#tDur').textContent = fmt(dur);
+    $<HTMLInputElement>('#seek').value = String(dur ? Math.round((p / dur) * 1000) : 0);
 }
+
+/* ---------- Device picker ---------- */
 
 const waitClose = (dlg: HTMLDialogElement) =>
     new Promise<void>(r => dlg.addEventListener('close', () => r(), { once: true }));

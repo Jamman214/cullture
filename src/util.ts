@@ -51,10 +51,10 @@ export const PLAY_PATH = '<path fill="currentColor" d="M7 4v16l13-8z"/>';
 export const PAUSE_PATH = '<path fill="currentColor" d="M6 4h4v16H6zM14 4h4v16h-4z"/>';
 
 /** Star buttons in DOM order 5..1; the container uses row-reverse so CSS hover lights lower stars. */
-export function starsHtml(r: number): string {
+export function starsHtml(r: number, big = false): string {
     let h = '';
     for (let n = 5; n >= 1; n--) {
-        h += `<button class="star${r >= n ? ' on' : ''}" data-v="${n}" aria-label="Rate ${plural(n, 'star')}">${STAR}</button>`;
+        h += `<button class="star${r >= n ? ' on' : ''}" data-v="${n}" aria-label="Rate ${plural(n, 'star')}">${STAR}${big ? `<kbd>${n}</kbd>` : ''}</button>`;
     }
     return h;
 }

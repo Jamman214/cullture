@@ -8,8 +8,8 @@ All runtime state lives in one object, `S`, exported from `state.ts`. Modules re
 | Songs | `tracks`, `byId`, `view` | All loaded songs, a lookup by ID, the filtered and sorted list on screen |
 | Selection | `sel`, `anchor`, `queue` | Ticked song IDs, the last clicked row for shift-select, an optional play-selected order |
 | Filters | `filter.q`, `filter.status`, `filter.ratings`, `filter.sort` | Search text, played status, rating chips, sort order |
-| Ratings | `ratings`, `opts` | Saved ratings and play history; the two player options |
-| Playback | `cur`, `playing`, `pos`, `posAt`, `dur`, `dragging` | Current song, play state, last known position and when it was read |
+| Ratings | `ratings`, `opts` | Saved ratings and play history; the three preferences |
+| Playback | `pb` | The playback state: mode, current song, position and length. It only changes through `dispatch` in `player.ts`; see [playback.md](playback.md) |
 | Devices | `sdk`, `sdkDevice`, `deviceId`, `deviceName`, `pollTimer` | Browser player, chosen device, polling timer for remote devices |
 
 A `Track` is trimmed from Spotify's song object to `id`, `uri`, `name`, `artists`, `album`, two image URLs, `dur`, `added` and `idx` (its position in the playlist). Local files, podcast episodes and duplicate songs are skipped when loading.
@@ -21,12 +21,17 @@ Each rating entry is `{ r, t, p }`: the rating from 1 to 5, when it was rated, a
 | Key | Holds |
 | --- | --- |
 | `culler:ratings` | Every rating entry, keyed by track ID (saved 250 ms after the last change, and on page close) |
-| `culler:opts` | Skip-rated and auto-advance settings |
+| `culler:opts` | The three preferences: skip rated songs, go to next after rating, wait for a rating |
 | `culler:token` | Access token, refresh token, expiry time |
 | `culler:clientId` | Your Spotify app's Client ID |
 | `culler:device`, `culler:sdkDevice` | Last chosen playback device and the browser player's ID |
 | `culler:lastSource` | The playlist to reopen on next visit |
 | `culler:prog:<id>` | Rated count and total per playlist, for the picker's progress bars |
+| `culler:cache:<id>` | When a playlist was saved, its Spotify version ID and song count |
 | `culler:verifier`, `culler:state` | Temporary sign-in values, deleted once sign-in finishes |
 
 The keys keep the `culler:` prefix from before the rename, so data saved by earlier versions still loads. localStorage is separate for each address, including the port.
+
+## Saved songs in IndexedDB
+
+Each playlist's songs are saved in an IndexedDB database called `cullture` (`cullture-mock` in test mode), so opening a playlist again doesn't download it. `cache.ts` reads and writes it, and the `culler:cache:<id>` entries above say what's saved and when.
