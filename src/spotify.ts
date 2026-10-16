@@ -27,7 +27,8 @@ export async function getSources(me: SpotifyUser): Promise<Source[]> {
             return {
                 id: p.id, name: p.name, img: p.images?.[0]?.url ?? null,
                 total: (p.items ?? p.tracks)?.total ?? null,
-                owner: p.owner?.display_name, readable: mine, editable: mine
+                owner: p.owner?.display_name, readable: mine, editable: mine,
+                snapshot: p.snapshot_id ?? null
             };
         })
     ];
@@ -76,12 +77,15 @@ async function removeLiked(uris: string[]): Promise<void> {
     }
 }
 
-/** Removes songs in batches. Calls onBatch after each batch so partial progress is known if it fails. */
-export async function removeFromSource(src: Source, uris: string[], onBatch: (doneUris: string[]) => void): Promise<void> {
+/**
+ * Removes songs in batches. Calls onBatch after each batch so partial progress is known if it fails,
+ * with the playlist's new version ID (none for Liked Songs).
+ */
+export async function removeFromSource(src: Source, uris: string[], onBatch: (doneUris: string[], snapshot?: string) => void): Promise<void> {
     for (const part of chunk(uris, src.liked ? LIKED_BATCH : WRITE_BATCH)) {
-        if (src.liked) await removeLiked(part);
-        else await api(`/playlists/${src.id}/items`, { method: 'DELETE', body: { items: part.map(uri => ({ uri })) } });
-        onBatch(part);
+        if (src.liked) { await removeLiked(part); onBatch(part); continue; }
+        const res = await api<{ snapshot_id?: string } | null>(`/playlists/${src.id}/items`, { method: 'DELETE', body: { items: part.map(uri => ({ uri })) } });
+        onBatch(part, res?.snapshot_id);
     }
 }
 

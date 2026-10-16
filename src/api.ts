@@ -27,11 +27,15 @@ export async function api<T = unknown>(path: string, { method = 'GET', body, que
     for (let i = 0; i < 6; i++) {
         const tok = await getToken(force);
         force = false;
-        const r = await fetch(url, {
-            method,
-            body: body === undefined ? undefined : JSON.stringify(body),
-            headers: { Authorization: 'Bearer ' + tok, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }
-        });
+        const payload = body === undefined ? undefined : JSON.stringify(body);
+        // In test mode the simulated server answers instead; the import is dropped from normal builds.
+        const r = __MOCK__
+            ? await (await import('./mock/server')).mockFetch(method, url, payload)
+            : await fetch(url, {
+                method,
+                body: payload,
+                headers: { Authorization: 'Bearer ' + tok, ...(payload === undefined ? {} : { 'Content-Type': 'application/json' }) }
+            });
         if (r.status === 401 && !refreshed) { refreshed = force = true; continue; }
         if (r.status === 429) { await sleep(Math.min(Number(r.headers.get('Retry-After') || 2), 30) * 1000); continue; }
         if (r.status >= 500 && i < 2) { await sleep(700); continue; }

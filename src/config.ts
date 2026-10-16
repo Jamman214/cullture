@@ -1,3 +1,7 @@
+/** Test mode: Spotify is replaced by the simulated server in src/mock/. */
+export const MOCK = __MOCK__;
+export const MOCK_DEVICE = 'mock-device';
+
 export const API = 'https://api.spotify.com/v1';
 export const ACCOUNTS = 'https://accounts.spotify.com';
 export const SDK_URL = 'https://sdk.scdn.co/spotify-player.js';
@@ -16,16 +20,18 @@ export const WRITE_BATCH = 10;
 export const LIKED_BATCH = 40;
 export const PAGE = 50;
 
-/** localStorage keys. */
+/** localStorage keys. Test mode uses its own prefix so test ratings never mix with real ones. */
+const P = __MOCK__ ? 'culler-mock:' : 'culler:';
 export const KEY = {
-    clientId: 'culler:clientId',
-    token: 'culler:token',
-    verifier: 'culler:verifier',
-    state: 'culler:state',
-    ratings: 'culler:ratings',
-    opts: 'culler:opts',
-    device: 'culler:device',
-    sdkDevice: 'culler:sdkDevice',
-    lastSource: 'culler:lastSource',
-    progress: (sourceId: string) => `culler:prog:${sourceId}`
+    clientId: P + 'clientId',
+    token: P + 'token',
+    verifier: P + 'verifier',
+    state: P + 'state',
+    ratings: P + 'ratings',
+    opts: P + 'opts',
+    device: P + 'device',
+    sdkDevice: P + 'sdkDevice',
+    lastSource: P + 'lastSource',
+    progress: (sourceId: string) => `${P}prog:${sourceId}`,
+    cache: (sourceId: string) => `${P}cache:${sourceId}`
 } as const;

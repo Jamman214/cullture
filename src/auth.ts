@@ -1,4 +1,4 @@
-import { ACCOUNTS, KEY, REDIRECT, SCOPES } from './config';
+import { ACCOUNTS, KEY, MOCK, REDIRECT, SCOPES } from './config';
 import { LS } from './util';
 
 interface StoredToken { access: string; refresh?: string; exp: number }
@@ -17,13 +17,14 @@ const randStr = (n: number) => {
     return b64url(a).slice(0, n);
 };
 
-export const getClientId = () => LS.get<string | null>(KEY.clientId, null);
+export const getClientId = () => (MOCK ? 'mock' : LS.get<string | null>(KEY.clientId, null));
 export const setClientId = (id: string) => LS.set(KEY.clientId, id);
-export const hasToken = () => !!LS.get<StoredToken | null>(KEY.token, null);
+export const hasToken = () => MOCK || !!LS.get<StoredToken | null>(KEY.token, null);
 export const signOut = () => LS.del(KEY.token);
 
 /** Starts the Authorization Code + PKCE flow by redirecting to Spotify. */
 export async function login(): Promise<void> {
+    if (MOCK) { location.reload(); return; }
     const clientId = getClientId();
     if (!clientId) throw new Error('Missing Client ID');
     const verifier = randStr(64);
@@ -78,6 +79,7 @@ let refreshing: Promise<void> | null = null;
 
 /** Returns a valid access token, refreshing it when expired (or when `force` is true). */
 export async function getToken(force = false): Promise<string> {
+    if (MOCK) return 'mock-token';
     const t = LS.get<StoredToken | null>(KEY.token, null);
     if (!t) throw new SignedOutError('Signed out');
     if (!force && Date.now() < t.exp) return t.access;

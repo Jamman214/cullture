@@ -16,13 +16,13 @@ The stack is plain TypeScript and CSS, with no UI framework, bundled by Vite. Th
 
 | File | Covers |
 | --- | --- |
-| [running-and-building.md](running-and-building.md) | npm scripts, dev server address, Redirect URIs |
-| [project-layout.md](project-layout.md) | Every file, what it owns, and how modules depend on each other |
-| [state-and-data.md](state-and-data.md) | The app state object, rating entries, localStorage keys |
-| [spotify-integration.md](spotify-integration.md) | Sign-in, the API client, endpoints, February 2026 API changes |
-| [playback.md](playback.md) | Browser and remote playback, play order, staying in sync |
-| [ui-and-rendering.md](ui-and-rendering.md) | Screens, static and generated HTML, rendering strategy |
-| [user-flows.md](user-flows.md) | Start-up, rating, group rating, culling, keepers, backup |
-| [visual-design.md](visual-design.md) | Colour tokens, typography, layout, small screens, accessibility |
-| [keyboard-shortcuts.md](keyboard-shortcuts.md) | Every shortcut and when they apply |
-| [limits-and-changes.md](limits-and-changes.md) | Known limits and where to make common changes |
+| [running-and-building.md](docs/running-and-building.md) | npm scripts, dev server address, Redirect URIs |
+| [project-layout.md](docs/project-layout.md) | Every file, what it owns, and how modules depend on each other |
+| [state-and-data.md](docs/state-and-data.md) | The app state object, rating entries, localStorage keys |
+| [spotify-integration.md](docs/spotify-integration.md) | Sign-in, the API client, endpoints, February 2026 API changes |
+| [playback.md](docs/playback.md) | Browser and remote playback, play order, staying in sync |
+| [ui-and-rendering.md](docs/ui-and-rendering.md) | Screens, static and generated HTML, rendering strategy |
+| [user-flows.md](docs/user-flows.md) | Start-up, rating, group rating, culling, keepers, backup |
+| [visual-design.md](docs/visual-design.md) | Colour tokens, typography, layout, small screens, accessibility |
+| [keyboard-shortcuts.md](docs/keyboard-shortcuts.md) | Every shortcut and when they apply |
+| [limits-and-changes.md](docs/limits-and-changes.md) | Known limits and where to make common changes |

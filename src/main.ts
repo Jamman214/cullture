@@ -1,18 +1,19 @@
 import './styles.css';
 import { messageOf } from './api';
 import { SignedOutError, getClientId, handleRedirect, hasToken, login, setClientId, signOut } from './auth';
-import { KEY, REDIRECT } from './config';
+import { primeBeeper } from './beeper';
+import { KEY, MOCK, MOCK_DEVICE, REDIRECT } from './config';
 import { exportRatings, importRatings, openCull, refreshCull, removeTracks, reviewCull, cullIds, saveKeepers } from './cull';
 import { renderList, renderSummary, resumeTarget, syncSelDom, toggleSel, updateRow } from './list';
 import {
-    curPos, goNext, goPrev, loadSDK, openDevices, playFrom, rateCurrent, renderDeck, renderSeek, seekTo, setDevice, togglePlay
+    curPos, goNext, goPrev, loadSDK, openDevices, playFrom, rateCurrent, renderDeck, renderSeek, seekTo, setDevice, stopWaiting, togglePlay
 } from './player';
 import { S, flushRatings, rOf, saveOpts, setRating } from './state';
 import { getMe, getSources } from './spotify';
 import { toast } from './toast';
 import type { SortKey, StatusFilter } from './types';
 import { $, LS, esc, fmt, plural, starsHtml } from './util';
-import { openSource, renderPicker, show, showSetup } from './views';
+import { downloadSource, openSource, renderPicker, show, showSetup } from './views';
 
 /** Rates many songs at once, with an undo. */
 function bulkRate(ids: string[], r: number | null): void {
@@ -45,8 +46,11 @@ function bindSetup(): void {
         void login();
     };
     $('#srcGrid').onclick = e => {
-        const b = closest<HTMLButtonElement>(e, '.src');
-        if (b && !b.disabled && b.dataset.id) void openSource(b.dataset.id);
+        const id = closest(e, '.src')?.dataset.id;
+        if (!id) return;
+        if (closest(e, '.src-act')) { void downloadSource(id); return; }
+        const open = closest<HTMLButtonElement>(e, '.src-open');
+        if (open && !open.disabled) void openSource(id);
     };
     $('#switchBtn').onclick = renderPicker;
     $('#cullBtn').onclick = openCull;
@@ -67,7 +71,7 @@ function bindMenu(): void {
         switch (act) {
             case 'device': void openDevices(); break;
             case 'reload':
-                if (S.source) void openSource(S.source.id);
+                if (S.source) void openSource(S.source.id, { refresh: true });
                 else void loadSources().then(renderPicker);
                 break;
             case 'export': exportRatings(); break;
@@ -182,7 +186,6 @@ function bindDeck(): void {
     $('#prevBtn').onclick = goPrev;
     $('#fwdBtn').onclick = () => { void seekTo(curPos() + 15000); };
     $('#backBtn').onclick = () => { void seekTo(curPos() - 15000); };
-    $('#midBtn').onclick = () => { void seekTo(S.dur * 0.45); };
     $('#dStars').onclick = e => {
         const s = closest(e, '.star');
         if (!s) return;
@@ -194,7 +197,12 @@ function bindDeck(): void {
     seek.onchange = () => { S.dragging = false; void seekTo((Number(seek.value) / 1000) * S.dur); };
     $<HTMLInputElement>('#optSkip').onchange = e => { S.opts.skipRated = (e.target as HTMLInputElement).checked; saveOpts(); };
     $<HTMLInputElement>('#optAdvance').onchange = e => { S.opts.autoAdvance = (e.target as HTMLInputElement).checked; saveOpts(); };
-    $('#deviceBtn').onclick = () => { void openDevices(); };
+    $<HTMLInputElement>('#optWait').onchange = e => {
+        S.opts.waitForRating = (e.target as HTMLInputElement).checked;
+        saveOpts();
+        if (S.opts.waitForRating) primeBeeper(); // unlock sound now, while there's a click
+        else stopWaiting();
+    };
     setInterval(() => { if (S.playing) renderSeek(); }, 500);
 }
 
@@ -260,9 +268,14 @@ async function init(): Promise<void> {
         return;
     }
 
-    void loadSDK().then(ok => {
-        if (!ok) setDevice(S.deviceId, S.deviceId ? 'Spotify device' : null);
-    });
+    if (MOCK) {
+        $('#mockBadge').hidden = false;
+        setDevice(MOCK_DEVICE, 'Test speaker (simulated)');
+    } else {
+        void loadSDK().then(ok => {
+            if (!ok) setDevice(S.deviceId, S.deviceId ? 'Spotify device' : null);
+        });
+    }
 
     const last = LS.get<string | null>(KEY.lastSource, null);
     if (last && S.sources.some(s => s.id === last && s.readable)) void openSource(last);

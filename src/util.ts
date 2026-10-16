@@ -33,6 +33,16 @@ export const chunk = <T>(a: T[], n: number): T[][] => {
     return o;
 };
 
+/** "just now", "5 min ago", "3 hours ago", "2 days ago". */
+export function ago(ms: number): string {
+    const min = Math.round((Date.now() - ms) / 60000);
+    if (min < 1) return 'just now';
+    if (min < 60) return `${min} min ago`;
+    const h = Math.round(min / 60);
+    if (h < 24) return `${plural(h, 'hour')} ago`;
+    return `${plural(Math.round(h / 24), 'day')} ago`;
+}
+
 export const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
 export const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4L2.8 9.5l6.4-.8z"/></svg>';
@@ -41,10 +51,10 @@ export const PLAY_PATH = '<path fill="currentColor" d="M7 4v16l13-8z"/>';
 export const PAUSE_PATH = '<path fill="currentColor" d="M6 4h4v16H6zM14 4h4v16h-4z"/>';
 
 /** Star buttons in DOM order 5..1; the container uses row-reverse so CSS hover lights lower stars. */
-export function starsHtml(r: number, big = false): string {
+export function starsHtml(r: number): string {
     let h = '';
     for (let n = 5; n >= 1; n--) {
-        h += `<button class="star${r >= n ? ' on' : ''}" data-v="${n}" aria-label="Rate ${plural(n, 'star')}">${STAR}${big ? `<kbd>${n}</kbd>` : ''}</button>`;
+        h += `<button class="star${r >= n ? ' on' : ''}" data-v="${n}" aria-label="Rate ${plural(n, 'star')}">${STAR}</button>`;
     }
     return h;
 }

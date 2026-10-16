@@ -1,5 +1,6 @@
 /** The Cull dialog (remove low-rated songs, save keepers), confirmations, and ratings backup. */
 import { messageOf } from './api';
+import { saveCached } from './cache';
 import { renderList } from './list';
 import { renderDeck } from './player';
 import { S, rOf, saveRatings, setTracks } from './state';
@@ -87,11 +88,17 @@ export async function removeTracks(ids: string[]): Promise<void> {
     const gone = new Set<string>();
     toast(`Removing ${plural(uris.length, 'song')}…`);
     try {
-        await removeFromSource(src, uris, part => part.forEach(u => gone.add(u)));
+        await removeFromSource(src, uris, (part, snapshot) => {
+            part.forEach(u => gone.add(u));
+            if (snapshot) src.snapshot = snapshot;
+        });
     } catch (e) {
         toast(`Stopped after removing ${gone.size} of ${uris.length}: ${messageOf(e)}`);
     }
     setTracks(S.tracks.filter(t => !gone.has(t.uri)));
+    // Keep the saved copy in step, so it isn't flagged as changed on Spotify next time.
+    if (src.total != null) src.total = Math.max(0, src.total - gone.size);
+    void saveCached(src, S.tracks);
     renderList();
     if (gone.size === uris.length) toast(`Removed ${plural(gone.size, 'song')} from ${label}.`);
 }

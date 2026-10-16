@@ -1,6 +1,7 @@
 /** Playback: the Web Playback SDK (this browser) or remote control of another Spotify device. */
 import { api, messageOf, statusOf } from './api';
 import { getToken } from './auth';
+import { primeBeeper, startBeeping, stopBeeping } from './beeper';
 import { KEY, SDK_URL } from './config';
 import { renderSummary, resumeTarget, rowEl, updateRow } from './list';
 import { S, markPlayed, rOf, setRating } from './state';
@@ -83,6 +84,8 @@ export function applyState({ id, uri, linked, paused, pos, dur }: PlayerSnapshot
     const tid = id && S.byId.has(id) ? id
         : linked && S.byId.has(linked) ? linked
             : [...S.byId.values()].find(t => t.uri === uri)?.id;
+    // Spotify reporting "paused" right as the song should be finishing means it ended.
+    if (paused && (!tid || tid === S.cur) && checkEnded(2000)) return;
     if (tid && tid !== S.cur) {
         const old = S.cur;
         S.cur = tid;
@@ -111,6 +114,9 @@ function orderFrom(id: string): string[] {
 export async function playFrom(id: string): Promise<void> {
     const t = S.byId.get(id);
     if (!t) return;
+    stopWaiting();
+    S.endedFor = null;
+    primeBeeper();
     if (!S.deviceId) {
         await openDevices();
         if (!S.deviceId) return;
@@ -125,7 +131,10 @@ export async function playFrom(id: string): Promise<void> {
     renderDeck();
 
     // Hand Spotify the next 50 songs so it keeps going on its own.
-    const uris = orderFrom(id).slice(0, 50).map(x => S.byId.get(x)!.uri);
+    // When waiting for ratings, queue just this song so Spotify can't move on by itself.
+    S.queuedAlone = S.opts.waitForRating;
+    const ids = S.queuedAlone ? [id] : orderFrom(id).slice(0, 50);
+    const uris = ids.map(x => S.byId.get(x)!.uri);
     try {
         await api('/me/player/play', { method: 'PUT', query: { device_id: S.deviceId! }, body: { uris } });
     } catch (e) {
@@ -163,6 +172,10 @@ export function goPrev(): void {
 }
 
 export async function togglePlay(): Promise<void> {
+    if (S.waiting) return; // rate the song, or seek, to carry on
+    primeBeeper();
+    // The current song already finished (e.g. the preference was turned off while waiting): play the next one.
+    if (!S.playing && S.cur && S.endedFor === S.cur) { goNext(); return; }
     if (!S.cur) {
         const t = resumeTarget();
         if (t) void playFrom(t.id);
@@ -188,17 +201,26 @@ export const curPos = () => Math.min(S.dur, S.pos + (S.playing ? Date.now() - S.
 export async function seekTo(ms: number): Promise<void> {
     if (!S.cur) return;
     ms = Math.max(0, Math.min(S.dur - 1000, ms));
+    // While waiting the song is already at its end, so skipping forward has nowhere to go.
+    if (S.waiting && ms >= S.dur - 1000) return;
+    // Seeking while waiting for a rating means "let me hear that again": stop beeping and play from there.
+    const resume = S.waiting;
+    if (resume) { stopWaiting(); S.endedFor = null; S.playing = true; }
     S.pos = ms;
     S.posAt = Date.now();
-    renderSeek();
+    if (resume) renderDeck(); else renderSeek();
     try {
-        if (usingSdk()) await S.sdk!.seek(Math.round(ms));
+        // Restarting the song at the new position works even if Spotify has already finished it.
+        if (resume) await api('/me/player/play', { method: 'PUT', query: { device_id: S.deviceId ?? '' }, body: { uris: [S.byId.get(S.cur)!.uri], position_ms: Math.round(ms) } });
+        else if (usingSdk()) await S.sdk!.seek(Math.round(ms));
         else await api('/me/player/seek', { method: 'PUT', query: { position_ms: Math.round(ms), device_id: S.deviceId ?? '' } });
     } catch { /* ignore */ }
 }
 
 export function rateCurrent(r: number | null): void {
     if (!S.cur) return;
+    const wasWaiting = S.waiting && !!r;
+    if (wasWaiting) stopWaiting();
     setRating([S.cur], r);
     updateRow(S.cur);
     renderSummary();
@@ -207,8 +229,69 @@ export function rateCurrent(r: number | null): void {
     st.classList.remove('pop');
     void st.offsetWidth; // restart the animation
     st.classList.add('pop');
-    if (r && S.opts.autoAdvance) setTimeout(goNext, 300);
+    if (r && (S.opts.autoAdvance || wasWaiting)) setTimeout(goNext, 300);
 }
+
+/* ---------- Waiting for a rating ---------- */
+const TITLE = document.title;
+let hint = '';
+
+function startWaiting(): void {
+    S.waiting = true;
+    startBeeping();
+    $('#deck').classList.add('waiting');
+    $<HTMLButtonElement>('#playBtn').disabled = true;
+    $<HTMLButtonElement>('#fwdBtn').disabled = true;
+    const small = $('.rate small');
+    hint ||= small.textContent || '';
+    small.textContent = 'Rate this song to continue';
+    document.title = '⭐ Rate to continue · ' + TITLE;
+}
+
+export function stopWaiting(): void {
+    stopBeeping();
+    if (!S.waiting) return;
+    S.waiting = false;
+    $('#deck').classList.remove('waiting');
+    $<HTMLButtonElement>('#playBtn').disabled = false;
+    $<HTMLButtonElement>('#fwdBtn').disabled = false;
+    if (hint) $('.rate small').textContent = hint;
+    document.title = TITLE;
+}
+
+async function pausePlayback(): Promise<void> {
+    try {
+        if (usingSdk()) await S.sdk!.pause();
+        else await api('/me/player/pause', { method: 'PUT', query: { device_id: S.deviceId ?? '' } });
+    } catch { /* already stopped */ }
+}
+
+/**
+ * With "wait for a rating" on, handles the current song reaching its end (within `margin` ms):
+ * a rated song moves on, an unrated one stops and beeps. Returns true if it handled the end.
+ */
+function checkEnded(margin: number): boolean {
+    if (!S.cur || !S.playing || !S.dur || S.endedFor === S.cur) return false;
+    // Only needed with the preference on, or when the song was queued alone and Spotify won't move on itself.
+    if (!S.opts.waitForRating && !S.queuedAlone) return false;
+    if (curPos() < S.dur - margin) return false;
+    S.endedFor = S.cur;
+    if (!S.opts.waitForRating || rOf(S.cur)) { goNext(); return true; }
+    S.playing = false;
+    S.pos = S.dur;
+    S.posAt = Date.now();
+    renderDeck();
+    void pausePlayback();
+    startWaiting();
+    return true;
+}
+
+// Checks four times a second for a song ending, and for a rating given another way
+// (a star in the list, or the bulk bar) while waiting.
+setInterval(() => {
+    checkEnded(400);
+    if (S.waiting && rOf(S.cur)) { stopWaiting(); goNext(); }
+}, 250);
 
 export function renderDeck(): void {
     const t = S.cur ? S.byId.get(S.cur) : undefined;
@@ -216,13 +299,19 @@ export function renderDeck(): void {
     $('#dTitle').textContent = t ? t.name : 'Nothing playing';
     $('#dArtist').textContent = t ? t.artists : 'Press Resume or play any song';
     const r = t ? rOf(t.id) : 0;
+
+    // render stars
     const st = $('#dStars');
+    if (!st.children.length) st.innerHTML = starsHtml(r);
     st.dataset.r = String(r);
-    st.innerHTML = starsHtml(r, true);
+    st.querySelectorAll<HTMLElement>('.star').forEach(b =>
+        b.classList.toggle('on', r >= Number(b.dataset.v)));
+
     $('#playIcon').innerHTML = S.playing ? PAUSE_PATH : PLAY_PATH;
     $('#playBtn').setAttribute('aria-label', S.playing ? 'Pause' : 'Play');
     $<HTMLInputElement>('#optSkip').checked = S.opts.skipRated;
     $<HTMLInputElement>('#optAdvance').checked = S.opts.autoAdvance;
+    $<HTMLInputElement>('#optWait').checked = S.opts.waitForRating;
     renderSeek();
 }
 

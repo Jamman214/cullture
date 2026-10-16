@@ -18,6 +18,12 @@ export interface AppState {
     ratings: Ratings;
     opts: Opts;
     cur: string | null;
+    /** True while stopped at the end of a song, beeping for a rating. */
+    waiting: boolean;
+    /** The song whose end has already been handled, so it isn't handled twice. */
+    endedFor: string | null;
+    /** True when Spotify was given only the current song, so the app must start the next one itself. */
+    queuedAlone: boolean;
     playing: boolean;
     pos: number;
     dur: number;
@@ -35,8 +41,8 @@ export const S: AppState = {
     sel: new Set(), anchor: null, queue: null,
     filter: { q: '', status: 'all', ratings: new Set(), sort: 'order' },
     ratings: LS.get<Ratings>(KEY.ratings, {}),
-    opts: { skipRated: true, autoAdvance: true, ...LS.get<Partial<Opts>>(KEY.opts, {}) },
-    cur: null, playing: false, pos: 0, dur: 0, posAt: 0, dragging: false,
+    opts: { skipRated: true, autoAdvance: true, waitForRating: false, ...LS.get<Partial<Opts>>(KEY.opts, {}) },
+    cur: null, waiting: false, endedFor: null, queuedAlone: false, playing: false, pos: 0, dur: 0, posAt: 0, dragging: false,
     sdk: null, sdkDevice: null, deviceId: LS.get<string | null>(KEY.device, null), deviceName: null, pollTimer: null
 };
 

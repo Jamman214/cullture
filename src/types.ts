@@ -22,6 +22,7 @@ export interface Source {
     owner?: string;
     readable: boolean;
     editable: boolean;
+    snapshot?: string | null;
 }
 
 /** What the app remembers about one song: rating (1–5), when it was rated, when it was first played. */
@@ -46,6 +47,7 @@ export interface Filter {
 export interface Opts {
     skipRated: boolean;
     autoAdvance: boolean;
+    waitForRating: boolean;
 }
 
 export interface PlayerSnapshot {
@@ -89,6 +91,7 @@ export interface SpotifyPlaylist {
     items?: { total: number };
     tracks?: { total: number };
     external_urls?: { spotify?: string };
+    snapshot_id?: string;
 }
 export interface SpotifyUser { id: string; display_name?: string }
 export interface SpotifyDevice { id: string; name: string; type: string; is_active?: boolean }

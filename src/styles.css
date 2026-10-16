@@ -120,6 +120,16 @@ a {
     flex: 1
 }
 
+.badge {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--r3) 22%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--r3) 60%, var(--line))
+}
+
 .btn {
     border: 1px solid var(--line);
     background: var(--surface);
@@ -202,6 +212,32 @@ a {
 }
 
 .menu button:hover {
+    background: var(--surface2)
+}
+
+.menu-sep {
+    height: 1px;
+    background: var(--line);
+    margin: 6px 4px
+}
+
+.menu-head {
+    margin: 4px 12px 2px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted)
+}
+
+.menu-check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    cursor: pointer
+}
+
+.menu-check:hover {
     background: var(--surface2)
 }
 
@@ -289,22 +325,100 @@ h1 {
 }
 
 .src {
+    position: relative;
     border: 1px solid var(--line);
     background: var(--surface);
     border-radius: 14px;
-    padding: 10px;
+    padding: 10px
+}
+
+.src:has(.src-open:hover:not(:disabled)) {
+    border-color: var(--accent)
+}
+
+.src:has(.src-open:disabled) {
+    opacity: .5
+}
+
+.src-open {
+    border: 0;
+    background: none;
+    padding: 0;
+    width: 100%;
     text-align: left;
     display: flex;
     flex-direction: column;
     gap: 8px
 }
 
-.src:hover:not(:disabled) {
-    border-color: var(--accent)
+.src-open:disabled {
+    cursor: default
 }
 
-.src:disabled {
-    opacity: .5
+.src-status {
+    font-size: 12px
+}
+
+.src-status.stale {
+    color: var(--r2);
+    font-weight: 700
+}
+
+.src-act {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 0;
+    display: grid;
+    place-items: center;
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    backdrop-filter: blur(6px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .2)
+}
+
+.src-act:hover:not(:disabled) {
+    background: var(--accent);
+    color: var(--accent-ink)
+}
+
+.src-act:disabled {
+    cursor: progress
+}
+
+.src-act svg {
+    width: 18px;
+    height: 18px
+}
+
+.src-act.stale::after {
+    content: "";
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--r2);
+    border: 2px solid var(--surface)
+}
+
+.src-act.busy svg {
+    animation: spin .9s linear infinite
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg)
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .src-act.busy svg {
+        animation-duration: 3s
+    }
 }
 
 .src .art {
@@ -515,11 +629,6 @@ select.input {
     color: color-mix(in srgb, var(--bg) 40%, transparent)
 }
 
-.bulk .stars .star:hover,
-.bulk .stars .star:hover~.star {
-    color: color-mix(in srgb, var(--bg) 40%, transparent)
-}
-
 /* List */
 .thead,
 .row {
@@ -554,7 +663,6 @@ select.input {
 }
 
 .row.cur {
-    box-shadow: inset 3px 0 0 var(--accent);
     background: var(--surface)
 }
 
@@ -669,9 +777,79 @@ input[type=checkbox] {
     fill: currentColor
 }
 
-.stars .star:hover,
-.stars .star:hover~.star {
-    color: var(--muted)
+@media (hover: hover) {
+
+    /* While pointing at a star, ignore the saved rating... */
+    .stars:has(.star:hover) .star {
+        color: var(--unheard);
+    }
+
+    /* ...and preview the hovered rating, in its own colour */
+    .stars .star[data-v="1"]:hover,
+    .stars .star[data-v="1"]:hover~.star {
+        color: var(--r1);
+    }
+
+    .stars .star[data-v="2"]:hover,
+    .stars .star[data-v="2"]:hover~.star {
+        color: var(--r2);
+    }
+
+    .stars .star[data-v="3"]:hover,
+    .stars .star[data-v="3"]:hover~.star {
+        color: var(--r3);
+    }
+
+    .stars .star[data-v="4"]:hover,
+    .stars .star[data-v="4"]:hover~.star {
+        color: var(--r4);
+    }
+
+    .stars .star[data-v="5"]:hover,
+    .stars .star[data-v="5"]:hover~.star {
+        color: var(--r5);
+    }
+}
+
+/* Smooth star highlighting */
+.star {
+    /* colour fades, and sweeps left to right a beat apart per star */
+    transition: color .18s ease var(--d, 0ms);
+}
+
+.star[data-v="2"] {
+    --d: 25ms;
+}
+
+.star[data-v="3"] {
+    --d: 50ms;
+}
+
+.star[data-v="4"] {
+    --d: 75ms;
+}
+
+.star[data-v="5"] {
+    --d: 100ms;
+}
+
+.star svg {
+    /* slight springy overshoot when growing */
+    transition: transform .2s cubic-bezier(.3, 1.6, .5, 1);
+}
+
+@media (hover: hover) {
+    .stars .star:hover svg {
+        transform: scale(1.2);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .star,
+    .star svg {
+        transition: none;
+    }
 }
 
 .stars[data-r="1"] .on {
@@ -711,11 +889,21 @@ input[type=checkbox] {
     max-width: 1180px;
     margin: 0 auto;
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-areas: "art meta rate" "art seek rate" "opts opts opts";
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "song rate" "seek seek" "ctrls ctrls";
     gap: 6px 16px;
     align-items: center
 }
+
+.d-song {
+    grid-area: song;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "art meta";
+    gap: 6px 16px;
+    justify-self: start
+}
+
 
 .d-art {
     grid-area: art;
@@ -734,11 +922,12 @@ input[type=checkbox] {
 }
 
 .d-text {
-    min-width: 0;
+    max-width: max-content;
     flex: 1
 }
 
 .d-title {
+    min-width: 0;
     font-weight: 800;
     font-size: 19px;
     letter-spacing: -.01em;
@@ -748,6 +937,7 @@ input[type=checkbox] {
 }
 
 .d-artist {
+    min-width: 0;
     color: var(--muted);
     white-space: nowrap;
     overflow: hidden;
@@ -755,6 +945,8 @@ input[type=checkbox] {
 }
 
 .ctrls {
+    margin: 0 auto;
+    grid-area: ctrls;
     display: flex;
     gap: 2px;
     align-items: center
@@ -797,7 +989,8 @@ input[type=checkbox] {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px
+    gap: 2px;
+    justify-self: end;
 }
 
 .big .star svg {
@@ -992,7 +1185,7 @@ dialog .row-actions {
 
     .deck-in {
         grid-template-columns: auto minmax(0, 1fr);
-        grid-template-areas: "art meta" "seek seek" "rate rate" "opts opts"
+        grid-template-areas: "song rate" "seek seek" "ctrls ctrls"
     }
 
     .d-art {
@@ -1027,5 +1220,86 @@ dialog .row-actions {
 
     .bulk {
         position: static
+    }
+}
+
+@media (max-width: 480px) {
+    .deck-in {
+        grid-template-columns: auto;
+        grid-template-areas: "song" "seek" "ctrls" "rate"
+    }
+
+    .rate {
+        justify-self: auto;
+    }
+
+    .thead,
+    .row {
+        grid-template-columns: 26px 42px minmax(0, 1fr) 28px 32px;
+    }
+
+    .row .star:not([data-v="1"]) {
+        display: none;
+    }
+
+    .row .star {
+        pointer-events: none;
+    }
+}
+
+/* Waiting for a rating at the end of a song */
+@keyframes nudge {
+
+    0%,
+    100% {
+        transform: scale(1)
+    }
+
+    50% {
+        transform: scale(1.18)
+    }
+}
+
+.deck.waiting .big .star svg {
+    animation: nudge 1s ease-in-out infinite
+}
+
+.deck.waiting .big .star[data-v="2"] svg {
+    animation-delay: .08s
+}
+
+.deck.waiting .big .star[data-v="3"] svg {
+    animation-delay: .16s
+}
+
+.deck.waiting .big .star[data-v="4"] svg {
+    animation-delay: .24s
+}
+
+.deck.waiting .big .star[data-v="5"] svg {
+    animation-delay: .32s
+}
+
+.deck.waiting .rate small {
+    color: var(--accent);
+    font-weight: 700
+}
+
+.ctrls .icon-btn:disabled {
+    opacity: .35;
+    cursor: not-allowed;
+    background: none
+}
+
+.ctrls .play:disabled {
+    opacity: .35;
+    cursor: not-allowed;
+    background: var(--ink);
+    color: var(--bg)
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .deck.waiting .big .star svg {
+        animation: none
     }
 }
