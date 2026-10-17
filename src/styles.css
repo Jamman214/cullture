@@ -90,7 +90,8 @@ a {
 .top {
     position: sticky;
     top: env(safe-area-inset-top, 0px);
-    z-index: 20;
+    /* above the player bar (30) and selection bar (25), so the ⋯ menu opens in front of them */
+    z-index: 40;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -193,6 +194,10 @@ a {
     position: absolute;
     right: 0;
     top: 44px;
+    /* scroll inside the menu if the screen is too short to show it all */
+    max-height: calc(100dvh - 72px - env(safe-area-inset-top, 0px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: 12px;
@@ -244,7 +249,8 @@ a {
 main {
     max-width: 1180px;
     margin: 0 auto;
-    padding: 20px 16px 210px
+    /* room for the player bar, and the selection bar when it's open */
+    padding: 20px 16px calc(var(--deck-h, 0px) + var(--bulk-space, 0px) + 32px)
 }
 
 h1 {
@@ -523,7 +529,7 @@ h1 {
 
 .filters {
     position: sticky;
-    top: calc(env(safe-area-inset-top, 0px) + 59px);
+    top: calc(env(safe-area-inset-top, 0px) + var(--top-h, 59px));
     z-index: 10;
     background: var(--bg);
     display: flex;
@@ -534,8 +540,9 @@ h1 {
 }
 
 .filters .input {
-    flex: 1 1 220px;
-    min-width: 180px;
+    /* starts small so the row fits on one line; grows to fill any spare space */
+    flex: 1 1 160px;
+    min-width: 140px;
     padding: 8px 12px;
     border-radius: 999px
 }
@@ -596,39 +603,6 @@ select.input {
     padding: 7px 10px
 }
 
-.bulk {
-    position: sticky;
-    top: calc(env(safe-area-inset-top, 0px) + 112px);
-    z-index: 9;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    background: var(--ink);
-    color: var(--bg);
-    border-radius: 14px;
-    padding: 8px 10px;
-    margin-bottom: 8px
-}
-
-.bulk .btn {
-    background: transparent;
-    color: var(--bg);
-    border-color: color-mix(in srgb, var(--bg) 35%, transparent)
-}
-
-.bulk .btn.danger {
-    color: var(--r1)
-}
-
-.bulk b {
-    margin: 0 6px 0 4px
-}
-
-.bulk .stars .star {
-    color: color-mix(in srgb, var(--bg) 40%, transparent)
-}
-
 /* List */
 .thead,
 .row {
@@ -650,16 +624,12 @@ select.input {
     user-select: none;
     -webkit-user-select: none;
     content-visibility: auto;
-    contain-intrinsic-size: auto 56px;
+    contain-intrinsic-size: auto 54px;
     cursor: default
 }
 
 .row:hover {
     background: var(--surface)
-}
-
-.row.sel {
-    background: color-mix(in srgb, var(--accent) 12%, var(--surface))
 }
 
 .row.cur {
@@ -668,6 +638,10 @@ select.input {
 
 .row.cur .nm {
     color: var(--accent)
+}
+
+.row.sel {
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface))
 }
 
 .row img {
@@ -901,7 +875,10 @@ input[type=checkbox] {
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-areas: "art meta";
     gap: 6px 16px;
-    justify-self: start
+    justify-self: start;
+    /* allowed to be narrower than the song title, so the title can cut off with … */
+    min-width: 0;
+    max-width: 100%
 }
 
 
@@ -923,6 +900,7 @@ input[type=checkbox] {
 
 .d-text {
     max-width: max-content;
+    min-width: 0;
     flex: 1
 }
 
@@ -1108,29 +1086,11 @@ dialog .row-actions {
     margin-top: 12px
 }
 
-.dev {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-    border: 1px solid var(--line);
-    background: var(--bg);
-    border-radius: 10px;
-    padding: 10px 12px;
-    margin-bottom: 8px;
-    text-align: left
-}
-
-.dev[aria-current="true"] {
-    border-color: var(--accent);
-    font-weight: 700
-}
-
 .toast {
     position: fixed;
     left: 50%;
     transform: translateX(-50%);
-    bottom: calc(200px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--deck-h, 0px) + var(--bulk-space, 0px) + 16px);
     z-index: 50;
     background: var(--ink);
     color: var(--bg);
@@ -1184,7 +1144,7 @@ dialog .row-actions {
     }
 
     .deck-in {
-        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr) auto;
         grid-template-areas: "song rate" "seek seek" "ctrls ctrls"
     }
 
@@ -1206,26 +1166,15 @@ dialog .row-actions {
         display: none
     }
 
-    main {
-        padding-bottom: 300px
-    }
-
-    .toast {
-        bottom: calc(290px + env(safe-area-inset-bottom, 0px))
-    }
-
     .filters {
-        top: calc(env(safe-area-inset-top, 0px) + 59px)
+        top: calc(env(safe-area-inset-top, 0px) + var(--top-h, 59px))
     }
 
-    .bulk {
-        position: static
-    }
 }
 
 @media (max-width: 480px) {
     .deck-in {
-        grid-template-columns: auto;
+        grid-template-columns: minmax(0, 1fr);
         grid-template-areas: "song" "seek" "ctrls" "rate"
     }
 
@@ -1303,4 +1252,307 @@ dialog .row-actions {
     opacity: .35;
     cursor: not-allowed;
     background: none
+}
+
+/* Selection bar
+   Floats just above the player bar instead of sitting in the page, so selecting a
+   song never moves the list (and a double-click still lands on the same row).
+   It uses the normal surface colours, so it looks right in light and dark mode. */
+.bulk {
+    position: fixed;
+    left: 50%;
+    bottom: calc(var(--deck-h, 0px) + 12px);
+    z-index: 25;
+    width: min(1000px, calc(100% - 24px));
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 14px;
+    padding: 8px 10px;
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+    border-radius: 16px;
+    box-shadow: 0 12px 32px rgba(20, 16, 40, .22), 0 0 0 4px color-mix(in srgb, var(--accent) 8%, transparent);
+    /* closed: invisible and unclickable, ready to slide up */
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translate(-50%, 12px);
+    transition: opacity .16s ease, transform .22s cubic-bezier(.2, .9, .3, 1.2), visibility 0s linear .22s
+}
+
+.bulk.open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translate(-50%, 0);
+    transition: opacity .16s ease, transform .22s cubic-bezier(.2, .9, .3, 1.2), visibility 0s
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .bulk,
+    .bulk.open {
+        transform: translate(-50%, 0)
+    }
+}
+
+.bulk-sel,
+.bulk-rate,
+.bulk-acts {
+    display: flex;
+    align-items: center;
+    gap: 6px
+}
+
+.bulk-sel b {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    margin-right: 2px
+}
+
+.bulk-sep {
+    width: 1px;
+    align-self: stretch;
+    background: var(--line)
+}
+
+.bulk-label {
+    color: var(--muted);
+    font-size: 13px
+}
+
+.bulk .stars .star svg {
+    width: 24px;
+    height: 24px
+}
+
+.bulk-acts {
+    margin-left: auto
+}
+
+.bulk .icon-btn {
+    width: 32px;
+    height: 32px
+}
+
+.bulk .icon-btn svg {
+    width: 16px;
+    height: 16px
+}
+
+.linkish {
+    border: 0;
+    background: none;
+    padding: 4px 6px;
+    border-radius: 6px;
+    color: var(--accent);
+    font-weight: 600;
+    white-space: nowrap
+}
+
+.linkish:hover {
+    background: color-mix(in srgb, var(--accent) 10%, transparent)
+}
+
+.btn.ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-color: transparent;
+    background: transparent
+}
+
+.btn.ghost:hover:not(:disabled) {
+    border-color: transparent;
+    background: var(--surface2)
+}
+
+.btn.ghost.danger {
+    color: var(--danger)
+}
+
+.btn.ghost.danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger) 12%, transparent)
+}
+
+.btn.ghost svg {
+    width: 14px;
+    height: 14px
+}
+
+/* Narrow screens: what's selected on the first row; stars and actions on the second */
+@media (max-width: 600px) {
+    .bulk {
+        gap: 4px 8px
+    }
+
+    .bulk-sel {
+        width: 100%
+    }
+
+    .bulk-sep,
+    .bulk-label,
+    .bulk .long,
+    .bulk .remove-label {
+        display: none
+    }
+
+    .bulk-rate {
+        flex: 1
+    }
+
+    .bulk .btn.ghost {
+        padding: 6px 8px
+    }
+
+    .bulk .stars .star {
+        padding: 3px
+    }
+}
+
+/* Top bar on narrow screens: keep everything on screen */
+#switchBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px
+}
+
+#switchBtn svg {
+    width: 16px;
+    height: 16px
+}
+
+@media (max-width: 600px) {
+    .top {
+        gap: 6px;
+        padding: 10px 12px
+    }
+
+    .brand {
+        font-size: 18px;
+        margin-right: 0
+    }
+
+    #switchBtn {
+        padding: 7px 10px
+    }
+
+    #switchBtn .label {
+        display: none
+    }
+}
+
+@media (max-width: 420px) {
+    .badge {
+        display: none
+    }
+}
+
+@media (max-width: 380px) {
+    .bulk .stars .star svg {
+        width: 20px;
+        height: 20px
+    }
+
+    .bulk .btn.ghost {
+        padding: 6px
+    }
+}
+
+/* Tags (instrumental, private): shown as small icons */
+.tag-icon {
+    width: 13px;
+    height: 13px;
+    flex: none
+}
+
+/* The title line holds the name and its tags; the name cuts off first */
+.nm-line,
+.d-title-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0
+}
+
+.nm-line .nm,
+.d-title-line .d-title {
+    min-width: 0
+}
+
+.d-tags {
+    display: inline-flex;
+    gap: 4px;
+    flex: none
+}
+
+.d-tags:empty {
+    display: none
+}
+
+.tag {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    /* a tint of the text colour, so it shows on plain, hovered and selected rows alike */
+    background: color-mix(in srgb, var(--ink) 9%, transparent);
+    color: var(--muted)
+}
+
+.tag .tag-icon {
+    width: 12px;
+    height: 12px
+}
+
+.d-tags .tag {
+    width: 24px;
+    height: 24px
+}
+
+.d-tags .tag .tag-icon {
+    width: 14px;
+    height: 14px
+}
+
+/* Filter chips and selection-bar toggles: icon only */
+.chip-tag {
+    padding: 5px 9px
+}
+
+.chip-tag .tag-icon {
+    width: 14px;
+    height: 14px
+}
+
+.bulk .btn.ghost.tag-toggle-btn {
+    padding: 6px 9px
+}
+
+.bulk .btn.ghost.tag-toggle-btn .tag-icon {
+    width: 15px;
+    height: 15px
+}
+
+/* Pressed selection-bar toggle: a light tint, like the pressed filter chips */
+.bulk .btn.ghost.tag-toggle-btn[aria-pressed="true"],
+.bulk .btn.ghost.tag-toggle-btn[aria-pressed="true"]:hover {
+    background: color-mix(in srgb, var(--ink) 16%, transparent);
+    color: var(--ink)
+}
+
+/* Tag chips. "Only" uses the normal pressed-chip look (.chip[aria-pressed="true"]).
+   "Exclude" keeps the plain background, with an outline and a line through the icon. */
+.chip-tag {
+    position: relative
+}
+
+/* Excluding: the same look as the pressed 1★ chip (red tint and outline) */
+.chip-tag[data-state="exclude"] {
+    --c: var(--r1)
 }

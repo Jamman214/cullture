@@ -1,6 +1,7 @@
 /** The Cull dialog (remove low-rated songs, save keepers), confirmations, and ratings backup. */
 import { messageOf } from './api';
 import { saveCached } from './cache';
+import { TAGS } from './tags';
 import { renderList } from './list';
 import { renderDeck } from './player';
 import { S, rOf, saveRatings, setTracks } from './state';
@@ -150,6 +151,7 @@ export async function importRatings(file: File): Promise<void> {
             const merged = { ...cur };
             if (e.r && e.r >= 1 && e.r <= 5 && (!cur.r || (e.t || 0) > (cur.t || 0))) { merged.r = e.r; merged.t = e.t; }
             if (e.p && !cur.p) merged.p = e.p;
+            for (const t of TAGS) if (e[t.key]) merged[t.key] = true;
             S.ratings[id] = merged;
             n++;
         }

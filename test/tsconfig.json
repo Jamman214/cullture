@@ -1,0 +1,15 @@
+{
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "types": [
+            "spotify-web-playback-sdk",
+            "vite/client",
+            "node"
+        ],
+        "noUnusedLocals": false
+    },
+    "include": [
+        "../src",
+        "."
+    ]
+}

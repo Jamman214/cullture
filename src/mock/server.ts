@@ -15,6 +15,19 @@ const byUri = new Map(lib.tracks.map(t => [t.uri, t]));
 const chaos = new URLSearchParams(location.search).has('chaos');
 let created = 0;
 
+/**
+ * Relinking, like Spotify does when a song isn't available in your country: playing song 6 of
+ * "Late night" actually plays song 21, a copy of it on another album that's also in the playlist.
+ */
+const relinks = new Map<string, SpotifyTrack>();
+{
+    const late = lib.playlists.find(p => p.id === 'mockpllatenight')!;
+    const asked = late.items[5].item!, copy = late.items[20].item!;
+    Object.assign(copy, { name: asked.name, artists: asked.artists, duration_ms: asked.duration_ms });
+    copy.album = { ...copy.album!, name: (copy.album?.name ?? '') + ' (Deluxe)' };
+    relinks.set(asked.uri, copy);
+}
+
 /** Playlist version IDs, bumped on every edit like Spotify's snapshot_id. */
 const revs = new Map<string, number>();
 const snapshotOf = (p: MockPlaylist) => `${p.id}-${revs.get(p.id) ?? 0}`;
@@ -122,7 +135,11 @@ export async function mockFetch(method: string, rawUrl: string, payload?: string
     }
 
     if (route === 'GET /me/player/devices') {
-        return json(200, { devices: [{ id: MOCK_DEVICE, name: 'Test speaker (simulated)', type: 'Speaker', is_active: !!player }] });
+        return json(200, {
+            devices: [
+                { id: MOCK_DEVICE, name: 'Test speaker (simulated)', type: 'Speaker', is_active: !!player },
+            ]
+        });
     }
 
     if (path.startsWith('/me/player')) {
@@ -143,7 +160,9 @@ export async function mockFetch(method: string, rawUrl: string, payload?: string
                 return json(204);
             case 'GET /me/player': {
                 if (!player) return json(204);
-                const item: SpotifyTrack | undefined = byUri.get(player.uris[player.index]);
+                const asked = byUri.get(player.uris[player.index]);
+                const copy = asked && relinks.get(asked.uri);
+                const item = copy ? { ...copy, linked_from: { id: asked!.id!, uri: asked!.uri } } : asked;
                 return json(200, { is_playing: player.playing, progress_ms: Math.round(player.pos), device: { id: MOCK_DEVICE }, item });
             }
         }

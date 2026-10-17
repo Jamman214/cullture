@@ -15,8 +15,8 @@
 
 ## Group rating
 
-1. Select songs by clicking rows or checkboxes, shift-clicking for a range, or the header checkbox and **Select all shown** for everything filtered.
-2. Click a star in the bulk bar, or **Clear ratings**.
+1. Select songs by clicking rows or checkboxes, shift-clicking for a range, or the header checkbox and **Select all** in the selection bar for everything filtered. Double-clicking a row plays it and leaves the selection as it was.
+2. Click a star in the selection bar, or **Clear rating**. Esc or the × deselects everything.
 3. `bulkRate` saves the previous ratings first, so the toast's **Undo** restores them exactly. The selection is then cleared.
 
 Filters combine: search text, played status and rating chips all apply at once, so "Played" plus the "Unrated" chip finds songs you've heard but not rated. Clicking a segment of the progress bar sets the filters for that group.
@@ -37,3 +37,13 @@ The second half of the Cull dialog saves songs rated at or above 3, 4 or 5 stars
 ## Backup
 
 **Export ratings** downloads `cullture-ratings-<date>.json` with every entry, plus song names for the open playlist so the file is readable. **Import ratings** merges a file in: for each song the more recent rating wins, and play history is kept from either side.
+
+## Tags
+
+Songs can be marked **instrumental** or **private**. Press **I** or **P** while a song plays to toggle it; a notification confirms it, with **Undo**. To tag several songs, select them and use the ♪ or padlock toggle in the selection bar, which is pressed when every selected song already has that tag, and removes it when pressed again. On phones the selection bar is the way to tag, since there are no keys.
+
+Tags show as icons after the song's title, in the list and the player bar. The ♪ and padlock chips after the star chips show only songs with those tags; they combine with each other and with the other filters. Tags are saved with ratings and included in export and import.
+
+## Random order
+
+**Random order** in the sort dropdown shuffles the list. The order stays put while you rate songs or change filters, and playback follows it. **Shuffle again**, next to the dropdown, deals a new order, as does choosing **Random order** again. It isn't saved, so reloading or opening another playlist goes back to playlist order.

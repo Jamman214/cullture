@@ -29,7 +29,7 @@ The test library is built from a fixed seed, so it's the same on every run:
 | Today's Top Hits | 50 | A playlist you don't own, which should show greyed out |
 | Empty playlist | 0 | The empty-list message |
 
-Playback goes to a simulated **Test speaker**: no sound plays, but the position advances in real time and it moves to the next song when one ends, so you can test auto-advance by jumping near the end of a song.
+Playback goes to a simulated **Test speaker** by default. A **Sleeping phone** device is also listed: it accepts commands but never plays, for testing a device that doesn't respond. Song 6 of Late night is relinked to a copy at song 21, the way Spotify does with songs unavailable in your country. On the Test speaker, no sound plays, but the position advances in real time and it moves to the next song when one ends, so you can test auto-advance by jumping near the end of a song.
 
 Changes such as removed songs and new playlists are kept in memory, so reloading the page restores the original library. Ratings and settings are saved under a separate `culler-mock:` prefix, so test ratings never mix with your real ones.
 

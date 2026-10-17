@@ -1,32 +1,37 @@
 import './styles.css';
 import { messageOf } from './api';
 import { SignedOutError, getClientId, handleRedirect, hasToken, login, setClientId, signOut } from './auth';
-import { KEY, MOCK, MOCK_DEVICE, REDIRECT } from './config';
+import { KEY, MOCK, REDIRECT } from './config';
 import { exportRatings, importRatings, openCull, refreshCull, removeTracks, reviewCull, cullIds, saveKeepers } from './cull';
-import { renderList, renderSummary, resumeTarget, syncSelDom, toggleSel, updateRow } from './list';
+import { clickSelect, renderBulk, renderList, renderSummary, reshuffle, resumeTarget, syncSelDom, toggleSel, updateBarSpace, updateRow } from './list';
 import {
-    goNext, goPrev, loadSDK, openDevices, playSong, prefsChanged, rateCurrent, ratingsChanged, renderDeck,
-    seekBy, seekToFraction, setDevice, setDragging, togglePlay
+    goNext, goPrev, loadSDK, playSong, prefsChanged, rateCurrent, ratingsChanged, renderDeck, seekBy, seekToFraction, setDragging, toggleTagCurrent, togglePlay, useTestSpeaker
 } from './player';
-import { S, flushRatings, rOf, saveOpts, setRating } from './state';
+import { S, flushRatings, hasTag, rOf, saveOpts, setRating, setTag } from './state';
+import { nextTagFilter, TAGS, type TagKey, tagDef } from './tags';
 import { getMe, getSources } from './spotify';
 import { toast } from './toast';
 import type { SortKey, StatusFilter } from './types';
 import { $, LS, esc, plural, starsHtml } from './util';
 import { downloadSource, openSource, renderPicker, show, showSetup } from './views';
 
-/** Rates many songs at once, with an undo. */
+/**
+ * Rates many songs at once, with an undo. Only the affected rows are redrawn, so the
+ * list doesn't move and filters aren't reapplied until you next change them.
+ */
 function bulkRate(ids: string[], r: number | null): void {
     const prev = ids.map(id => [id, rOf(id)] as const);
+    const refresh = () => {
+        for (const id of ids) updateRow(id);
+        renderSummary();
+        ratingsChanged(ids);
+    };
     setRating(ids, r);
-    S.sel.clear();
-    renderList();
-    ratingsChanged(ids);
+    refresh();
     toast(r ? `Rated ${plural(ids.length, 'song')} ${r}★` : `Cleared ratings on ${plural(ids.length, 'song')}`, {
         undo: () => {
             for (const [id, old] of prev) setRating([id], old || null);
-            renderList();
-            renderDeck();
+            refresh();
         }
     });
 }
@@ -69,7 +74,6 @@ function bindMenu(): void {
         if (!act) return;
         menu.hidden = true;
         switch (act) {
-            case 'device': void openDevices(); break;
             case 'reload':
                 if (S.source) void openSource(S.source.id, { refresh: true });
                 else void loadSources().then(renderPicker);
@@ -102,7 +106,15 @@ function bindFilters(): void {
         renderList();
     };
     $('#chips').onclick = e => {
-        const k = closest(e, '.chip')?.dataset.r;
+        const chip = closest(e, '.chip');
+        const tag = chip?.dataset.tag as TagKey | undefined;
+        if (tag) {
+            const next = nextTagFilter(S.filter.tags.get(tag));
+            if (next) S.filter.tags.set(tag, next); else S.filter.tags.delete(tag);
+            renderList();
+            return;
+        }
+        const k = chip?.dataset.r;
         if (!k) return;
         if (S.filter.ratings.has(k)) S.filter.ratings.delete(k);
         else S.filter.ratings.add(k);
@@ -110,9 +122,11 @@ function bindFilters(): void {
     };
     $<HTMLSelectElement>('#sort').onchange = e => {
         S.filter.sort = (e.target as HTMLSelectElement).value as SortKey;
+        if (S.filter.sort === 'shuffle') reshuffle(); // a fresh order each time it's chosen
         renderList();
     };
     // Clicking a segment of the progress bar filters to that group.
+    $('#reshuffle').onclick = () => { reshuffle(); renderList(); };
     $('#bar').onclick = e => {
         const k = closest(e, 'button')?.dataset.k;
         if (!k) return;
@@ -147,11 +161,15 @@ function bindList(): void {
         if (closest(e, '.pbtn')) { S.queue = null; void playSong(id); return; }
         const target = e.target as HTMLElement;
         if (target.classList.contains('ck')) { toggleSel(id, (target as HTMLInputElement).checked, e.shiftKey); return; }
-        toggleSel(id, !S.sel.has(id), e.shiftKey);
+        if (e.detail > 1) return; // second click of a double-click: the dblclick handler takes over
+        clickSelect(id, e.ctrlKey || e.metaKey, e.shiftKey);
     });
+    // Double-click plays the song; the first click has already selected it, and it stays selected.
     list.addEventListener('dblclick', e => {
         const id = closest(e, '.row')?.dataset.id;
-        if (id && !closest(e, 'button,input')) { S.queue = null; void playSong(id); }
+        if (!id || closest(e, 'button,input')) return;
+        S.queue = null;
+        void playSong(id);
     });
     $<HTMLInputElement>('#master').onchange = e => {
         const on = (e.target as HTMLInputElement).checked;
@@ -161,6 +179,11 @@ function bindList(): void {
 }
 
 function bindBulk(): void {
+    // The list and toasts make room for the player and selection bars as they change size.
+    const watch = new ResizeObserver(updateBarSpace);
+    watch.observe($('#deck'));
+    watch.observe($('.top'));
+    watch.observe($('#bulk'));
     const stars = $('#bulkStars');
     stars.innerHTML = starsHtml(0);
     stars.onclick = e => {
@@ -169,6 +192,22 @@ function bindBulk(): void {
     };
     $('#selShown').onclick = () => { for (const t of S.view) S.sel.add(t.id); syncSelDom(); };
     $('#bulkClear').onclick = () => bulkRate([...S.sel], null);
+    // A tag toggle adds the tag to the selection, or removes it if every selected song already has it.
+    $('#bulk').querySelectorAll<HTMLElement>('[data-tag]').forEach(btn => {
+        btn.onclick = () => {
+            const tag = btn.dataset.tag as TagKey;
+            const ids = [...S.sel];
+            const on = !ids.every(id => hasTag(id, tag));
+            const prev = ids.map(id => [id, hasTag(id, tag)] as const);
+            const refresh = () => { for (const id of ids) updateRow(id); renderSummary(); renderBulk(); renderDeck(); };
+            setTag(ids, tag, on);
+            refresh();
+            const label = tagDef(tag).label.toLowerCase();
+            toast(on ? `Marked ${plural(ids.length, 'song')} as ${label}` : `${plural(ids.length, 'song')} no longer marked ${label}`, {
+                undo: () => { for (const [id, was] of prev) setTag([id], tag, was); refresh(); }
+            });
+        };
+    });
     $('#bulkNone').onclick = () => { S.sel.clear(); syncSelDom(); };
     $('#bulkPlay').onclick = () => {
         const order = new Map(S.view.map((t, i) => [t.id, i]));
@@ -205,17 +244,6 @@ function bindDeck(): void {
 }
 
 function bindDialogs(): void {
-    const dev = $<HTMLDialogElement>('#devDlg');
-    $('#devList').onclick = e => {
-        const b = closest(e, '.dev');
-        if (!b?.dataset.id) return;
-        setDevice(b.dataset.id, b.dataset.name);
-        dev.close();
-        if (S.pb.cur) void playSong(S.pb.cur);
-    };
-    $('#devRefresh').onclick = () => { dev.close(); setTimeout(() => { void openDevices(); }, 0); };
-    $('#devClose').onclick = () => dev.close();
-
     $('#cullMax').onchange = refreshCull;
     $('#keepMin').onchange = refreshCull;
     $('#cullClose').onclick = () => $<HTMLDialogElement>('#cullDlg').close();
@@ -235,12 +263,14 @@ function bindKeys(): void {
         if (t.matches('input[type=search],input[type=text],select,textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
         if (e.key === '/') { e.preventDefault(); $('#q').focus(); return; }
         if (/^[1-5]$/.test(e.key)) { e.preventDefault(); rateCurrent(Number(e.key)); return; }
+        const tag = TAGS.find(t => t.hotkey === e.key.toLowerCase());
+        if (tag) { toggleTagCurrent(tag.key); return; }
         if (e.key === '0' || e.key === 'Backspace') { e.preventDefault(); rateCurrent(null); return; }
         if (e.key === ' ' && t.tagName !== 'BUTTON') { e.preventDefault(); togglePlay(); return; }
         if (e.key === 'ArrowRight') { e.preventDefault(); if (e.shiftKey) goNext(); else seekBy(15000); return; }
         if (e.key === 'ArrowLeft') { e.preventDefault(); if (e.shiftKey) goPrev(); else seekBy(-15000); return; }
         if (e.key.toLowerCase() === 'n') goNext();
-        if (e.key.toLowerCase() === 'm') seekToFraction(0.45);
+        if (e.key.toLowerCase() === 'm') seekToFraction(0.5);
         if (e.key === 'Escape' && S.sel.size) { S.sel.clear(); syncSelDom(); }
     });
 }
@@ -268,11 +298,9 @@ async function init(): Promise<void> {
 
     if (MOCK) {
         $('#mockBadge').hidden = false;
-        setDevice(MOCK_DEVICE, 'Test speaker (simulated)');
+        useTestSpeaker();
     } else {
-        void loadSDK().then(ok => {
-            if (!ok) setDevice(S.deviceId, S.deviceId ? 'Spotify device' : null);
-        });
+        void loadSDK();
     }
 
     const last = LS.get<string | null>(KEY.lastSource, null);

@@ -7,14 +7,14 @@ All runtime state lives in one object, `S`, exported from `state.ts`. Modules re
 | Account | `me`, `sources`, `source` | Signed-in user, the playlist list, the open playlist |
 | Songs | `tracks`, `byId`, `view` | All loaded songs, a lookup by ID, the filtered and sorted list on screen |
 | Selection | `sel`, `anchor`, `queue` | Ticked song IDs, the last clicked row for shift-select, an optional play-selected order |
-| Filters | `filter.q`, `filter.status`, `filter.ratings`, `filter.sort` | Search text, played status, rating chips, sort order |
+| Filters | `filter.q`, `filter.status`, `filter.ratings`, `filter.tags`, `filter.sort` | Search text, played status, rating chips, tag chips, sort order |
 | Ratings | `ratings`, `opts` | Saved ratings and play history; the three preferences |
 | Playback | `pb` | The playback state: mode, current song, position and length. It only changes through `dispatch` in `player.ts`; see [playback.md](playback.md) |
 | Devices | `sdk`, `sdkDevice`, `deviceId`, `deviceName`, `pollTimer` | Browser player, chosen device, polling timer for remote devices |
 
 A `Track` is trimmed from Spotify's song object to `id`, `uri`, `name`, `artists`, `album`, two image URLs, `dur`, `added` and `idx` (its position in the playlist). Local files, podcast episodes and duplicate songs are skipped when loading.
 
-Each rating entry is `{ r, t, p }`: the rating from 1 to 5, when it was rated, and when the song was first played (both in milliseconds). An entry is deleted once it has neither a rating nor a play. A song counts as played if it has either.
+Each rating entry is `{ r, t, p, inst, priv }`: the rating from 1 to 5, when it was rated, when the song was first played (both in milliseconds), and its tags. An entry is deleted once it has no rating, no play and no tags. A song counts as played if it has either.
 
 ## Saved data in localStorage
 

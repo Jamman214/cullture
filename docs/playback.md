@@ -53,7 +53,9 @@ Everything else in the app calls actions that send events: `playSong`, `togglePl
 | Learning what's playing | SDK pushes `player_state_changed` events | Polls `GET /me/player` every 2.5 s, skipped while the tab is hidden |
 | Needs | Premium, a desktop browser | Premium, Spotify open on that device |
 
-Both routes turn Spotify's reports into the same `spotify` event, after matching the song to the open list by ID, by the original ID when Spotify has swapped in a regional copy, or by URI.
+Both routes turn Spotify's reports into the same `spotify` event, after matching the song to the open list: first by the song Spotify was asked for, when it has swapped in a regional copy, then by ID, then by URI (see relinking in [spotify-integration.md](spotify-integration.md)).
+
+For other devices, a check that finds nothing playing on the chosen device, either nothing at all or something on another device, counts as paused. If a song you asked for hasn't started within four seconds, the machine shows a notification saying nothing started on that device.
 
 `loadSDK` loads Spotify's script at start-up and waits up to 15 seconds for the browser player. If it's ready, it becomes the device unless you picked a different one last time.
 

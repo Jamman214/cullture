@@ -1,8 +1,21 @@
 /** The song list: filtering, sorting, rendering, selection and the progress summary. */
 import { KEY } from './config';
-import { S, playedOf, rOf } from './state';
+import { S, hasTag, playedOf, rOf } from './state';
+import { TAGS, tagFilterTitle, type TagKey, tagsHtml } from './tags';
 import type { SortKey, Track } from './types';
 import { $, LS, PLAY_SVG, esc, fmt, plural, starsHtml } from './util';
+
+/**
+ * Each song's random position for "Random order". Kept until reshuffle(), so the order
+ * stays put while you rate songs or change filters.
+ */
+const shuffleKeys = new Map<string, number>();
+export function reshuffle(): void { shuffleKeys.clear(); }
+function shuffleKey(id: string): number {
+    let k = shuffleKeys.get(id);
+    if (k === undefined) { k = Math.random(); shuffleKeys.set(id, k); }
+    return k;
+}
 
 export function computeView(): void {
     const { q, status, ratings, sort } = S.filter;
@@ -13,6 +26,10 @@ export function computeView(): void {
         if (status === 'unplayed' && played) return false;
         if (status === 'played' && !played) return false;
         if (ratings.size && !ratings.has(r ? String(r) : 'none')) return false;
+        for (const [tag, f] of S.filter.tags) {
+            if (f === 'only' && !hasTag(t.id, tag)) return false;
+            if (f === 'exclude' && hasTag(t.id, tag)) return false;
+        }
         if (qq && !`${t.name} ${t.artists} ${t.album}`.toLowerCase().includes(qq)) return false;
         return true;
     });
@@ -23,7 +40,8 @@ export function computeView(): void {
         artist: (a, b) => a.artists.localeCompare(b.artists) || a.name.localeCompare(b.name),
         rdesc: (a, b) => (rOf(b.id) || -1) - (rOf(a.id) || -1) || a.idx - b.idx,
         rasc: (a, b) => (rOf(a.id) || 9) - (rOf(b.id) || 9) || a.idx - b.idx,
-        dur: (a, b) => b.dur - a.dur
+        dur: (a, b) => b.dur - a.dur,
+        shuffle: (a, b) => shuffleKey(a.id) - shuffleKey(b.id)
     };
     S.view = v.sort(cmp[sort]);
 }
@@ -36,7 +54,7 @@ export function rowHtml(t: Track): string {
 <input type="checkbox" class="ck" ${sel ? 'checked' : ''} aria-label="Select ${esc(t.name)}">
 <span class="n">${t.idx + 1}</span>
 <img loading="lazy" src="${esc(t.img)}" alt="">
-<div class="ti"><span class="nm">${esc(t.name)}</span><span class="ar">${esc(t.artists)}</span></div>
+<div class="ti"><span class="nm-line"><span class="nm">${esc(t.name)}</span>${tagsHtml(k => hasTag(t.id, k))}</span><span class="ar">${esc(t.artists)}</span></div>
 <span class="al">${esc(t.album)}</span>
 <span class="pl${played ? ' on' : ''}" title="${played ? 'Played' : 'Not played yet'}"></span>
 <span class="du">${fmt(t.dur)}</span>
@@ -81,6 +99,7 @@ export function clearFilters(): void {
     S.filter.q = '';
     S.filter.status = 'all';
     S.filter.ratings.clear();
+    S.filter.tags.clear();
     $<HTMLInputElement>('#q').value = '';
     renderList();
 }
@@ -118,8 +137,10 @@ export function renderSummary(): void {
     const c = counts();
     const total = S.tracks.length;
     const rated = c[1] + c[2] + c[3] + c[4] + c[5];
+    const tagged = TAGS.map(tg => [tg.label.toLowerCase(), S.tracks.filter(t => hasTag(t.id, tg.key)).length] as const)
+        .filter(([, n]) => n).map(([label, n]) => `${n} ${label}`);
     $('#sumLine').textContent = total
-        ? `${rated} of ${plural(total, 'song')} rated. ${c.heard} played but not rated, ${c.none} not played yet.`
+        ? `${rated} of ${plural(total, 'song')} rated. ${c.heard} played but not rated, ${c.none} not played yet.${tagged.length ? ` ${tagged.join(', ')}.` : ''}`
         : '';
     $('#bar').innerHTML = total
         ? CATS.filter(k => c[k.k]).map(k =>
@@ -143,8 +164,14 @@ export function renderFilters(): void {
     $('#status').querySelectorAll<HTMLButtonElement>('button').forEach(b =>
         b.setAttribute('aria-pressed', String(b.dataset.s === S.filter.status)));
     $('#chips').innerHTML = CHIPS.map(([k, l, c]) =>
-        `<button class="chip" data-r="${k}" style="--c:${c}" aria-pressed="${S.filter.ratings.has(k)}"><i></i>${l}</button>`).join('');
+        `<button class="chip" data-r="${k}" style="--c:${c}" aria-pressed="${S.filter.ratings.has(k)}"><i></i>${l}</button>`).join('')
+        + TAGS.map(t => {
+            const f = S.filter.tags.get(t.key);
+            const title = tagFilterTitle(t, f);
+            return `<button class="chip chip-tag" data-tag="${t.key}" data-state="${f ?? 'off'}" aria-pressed="${!!f}" aria-label="${esc(title)}" title="${esc(title)}">${t.icon}</button>`;
+        }).join('');
     $<HTMLSelectElement>('#sort').value = S.filter.sort;
+    $('#reshuffle').hidden = S.filter.sort !== 'shuffle';
     updateMaster();
 }
 
@@ -157,11 +184,60 @@ function updateMaster(): void {
 
 export function renderBulk(): void {
     const n = S.sel.size;
-    $('#bulk').hidden = !n;
-    $('#bulkCount').textContent = `${plural(n, 'song')} selected`;
-    $('#selShown').hidden = S.view.every(t => S.sel.has(t.id));
+    const bar = $('#bulk');
+    bar.classList.toggle('open', n > 0);
+    bar.inert = !n; // closed: can't be tabbed to or clicked
+    $('#bulkCount').textContent = `${n} selected`;
+    const sel = $('#selShown');
+    sel.hidden = S.view.every(t => S.sel.has(t.id));
+    sel.textContent = `Select all ${S.view.length}`;
+    updateBarSpace();
     $<HTMLButtonElement>('#bulkRemove').disabled = !S.source?.editable;
+    // A tag toggle is pressed when every selected song already has the tag; pressing it then removes it.
+    $('#bulk').querySelectorAll<HTMLElement>('[data-tag]').forEach(b => {
+        const tag = b.dataset.tag as TagKey;
+        b.setAttribute('aria-pressed', String(n > 0 && [...S.sel].every(id => hasTag(id, tag))));
+    });
     updateMaster();
+}
+
+/**
+ * Keeps CSS variables with the height of the top bar (--top-h), the player bar (--deck-h)
+ * and the space the selection bar needs (--bulk-space), so the sticky filter row, the list
+ * and toasts always line up with them, whatever font or screen size changes their height.
+ */
+export function updateBarSpace(): void {
+    const root = document.documentElement.style;
+    const bar = $('#bulk');
+    root.setProperty('--top-h', `${$('.top').getBoundingClientRect().height}px`);
+    root.setProperty('--deck-h', `${$('#deck').offsetHeight}px`);
+    root.setProperty('--bulk-space', bar.classList.contains('open') ? `${bar.offsetHeight + 12}px` : '0px');
+}
+
+/**
+ * Selection from clicking a row, like a file manager: a click selects just that row (or clears it
+ * if it's the only one selected), Ctrl/Cmd+click adds or removes it, and Shift+click selects the
+ * range from the last clicked row, replacing the selection (Ctrl+Shift adds the range instead).
+ */
+export function clickSelect(id: string, ctrl: boolean, shift: boolean): void {
+    const ids = S.view.map(t => t.id);
+    if (shift && S.anchor && ids.includes(S.anchor) && ids.includes(id)) {
+        let a = ids.indexOf(S.anchor);
+        let b = ids.indexOf(id);
+        if (a > b) [a, b] = [b, a];
+        if (!ctrl) S.sel.clear();
+        for (let i = a; i <= b; i++) S.sel.add(ids[i]);
+        // the anchor stays put, so another Shift+click resizes the same range
+    } else if (ctrl) {
+        if (S.sel.has(id)) S.sel.delete(id); else S.sel.add(id);
+        S.anchor = id;
+    } else {
+        const onlyThis = S.sel.size === 1 && S.sel.has(id);
+        S.sel.clear();
+        if (!onlyThis) S.sel.add(id);
+        S.anchor = id;
+    }
+    syncSelDom();
 }
 
 /** Toggles one row, or a range from the last clicked row when shift is held. */

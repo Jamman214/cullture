@@ -1,7 +1,8 @@
 import { KEY } from './config';
 import { type Playback, initialPlayback } from './playback';
 import { toast } from './toast';
-import type { Filter, Opts, Ratings, Source, Track, SpotifyUser } from './types';
+import { TAGS, type TagKey } from './tags';
+import type { Filter, Opts, RatingEntry, Ratings, Source, Track, SpotifyUser } from './types';
 import { LS } from './util';
 
 export interface AppState {
@@ -21,20 +22,18 @@ export interface AppState {
     /** Everything about playback. Changed only through dispatch() in player.ts. */
     pb: Playback;
     sdk: Spotify.Player | null;
-    sdkDevice: string | null;
     deviceId: string | null;
-    deviceName: string | null;
     pollTimer: number | null;
 }
 
 export const S: AppState = {
     me: null, sources: [], source: null, tracks: [], byId: new Map(), view: [],
     sel: new Set(), anchor: null, queue: null,
-    filter: { q: '', status: 'all', ratings: new Set(), sort: 'order' },
+    filter: { q: '', status: 'all', ratings: new Set(), sort: 'order', tags: new Map() },
     ratings: LS.get<Ratings>(KEY.ratings, {}),
     opts: { skipRated: true, autoAdvance: true, waitForRating: false, ...LS.get<Partial<Opts>>(KEY.opts, {}) },
     pb: initialPlayback,
-    sdk: null, sdkDevice: null, deviceId: LS.get<string | null>(KEY.device, null), deviceName: null, pollTimer: null
+    sdk: null, deviceId: null, pollTimer: null
 };
 
 const storageError = () => toast('Could not save to browser storage. Export your ratings as a backup.');
@@ -57,7 +56,21 @@ export function setRating(ids: string[], r: number | null): void {
     for (const id of ids) {
         const e = S.ratings[id] || (S.ratings[id] = {});
         if (r) { e.r = r; e.t = Date.now(); } else delete e.r;
-        if (!e.r && !e.p) delete S.ratings[id];
+        if (isEmpty(e)) delete S.ratings[id];
+    }
+    saveRatings();
+}
+
+/** An entry with nothing left in it: no rating, no play, no tags. */
+const isEmpty = (e: RatingEntry) => !e.r && !e.p && !TAGS.some(t => e[t.key]);
+
+export const hasTag = (id: string | null | undefined, tag: TagKey): boolean => !!(id && S.ratings[id]?.[tag]);
+
+export function setTag(ids: string[], tag: TagKey, on: boolean): void {
+    for (const id of ids) {
+        const e = S.ratings[id] || (S.ratings[id] = {});
+        if (on) e[tag] = true; else delete e[tag];
+        if (isEmpty(e)) delete S.ratings[id];
     }
     saveRatings();
 }

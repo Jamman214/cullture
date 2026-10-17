@@ -8,16 +8,14 @@
 import { api, messageOf, statusOf } from './api';
 import { getToken } from './auth';
 import { primeBeeper, setBeeping } from './beeper';
-import { KEY, SDK_URL } from './config';
+import { MOCK_DEVICE, SDK_URL } from './config';
 import { renderSummary, resumeTarget, rowEl, updateRow } from './list';
 import { type Context, type Effect, type PlaybackEvent, position, transition } from './playback';
-import { S, markPlayed, rOf, setRating } from './state';
-import { getDevices } from './spotify';
+import { S, hasTag, markPlayed, rOf, setRating, setTag } from './state';
+import { type TagKey, tagDef, tagsHtml } from './tags';
 import { toast } from './toast';
 import type { PlayerSnapshot, SpotifyPlaybackState } from './types';
-import { $, LS, PAUSE_PATH, PLAY_PATH, esc, fmt, starsHtml } from './util';
-
-const usingSdk = () => !!S.sdk && S.deviceId === S.sdkDevice;
+import { $, PAUSE_PATH, PLAY_PATH, fmt, starsHtml } from './util';
 
 /* ---------- The machine ---------- */
 
@@ -77,8 +75,7 @@ function run(fx: Effect): void {
 
 async function sendPlay(id: string, alone: boolean, positionMs: number): Promise<void> {
     if (!S.deviceId) {
-        dispatch({ type: 'failed', message: 'Choose where to play first.' });
-        void openDevices();
+        dispatch({ type: 'failed', message: NO_PLAYER });
         return;
     }
     void S.sdk?.activateElement();
@@ -89,9 +86,7 @@ async function sendPlay(id: string, alone: boolean, positionMs: number): Promise
     } catch (e) {
         const s = statusOf(e);
         if (s === 404) {
-            setDevice(null);
-            dispatch({ type: 'failed', message: 'That playback device isn\'t available. Pick another.' });
-            void openDevices();
+            dispatch({ type: 'failed', message: 'The browser player has disconnected. Reload the page to reconnect it.' });
         } else {
             dispatch({ type: 'failed', message: s === 403 ? 'Spotify refused playback. Playback control needs Spotify Premium.' : 'Couldn\'t start playback: ' + messageOf(e) });
         }
@@ -101,7 +96,7 @@ async function sendPlay(id: string, alone: boolean, positionMs: number): Promise
 /** Pause, resume or seek, through the browser player or the Web API. `failMessage` reports errors. */
 async function control(viaSdk: () => Promise<void>, path: string, query: Record<string, number> = {}, failMessage?: string): Promise<void> {
     try {
-        if (usingSdk()) await viaSdk();
+        if (S.sdk) await viaSdk();
         else await api(path, { method: 'PUT', query: { ...query, device_id: S.deviceId ?? '' } });
     } catch (e) {
         if (failMessage) dispatch({ type: 'failed', message: `${failMessage}: ${messageOf(e)}` });
@@ -116,12 +111,12 @@ setInterval(() => {
 
 /* ---------- Actions for the rest of the app ---------- */
 
+/** Shown when there's no browser player to play through. */
+const NO_PLAYER = 'Can\'t play here. Cullture plays through Spotify\'s browser player, which needs Spotify Premium and a desktop browser.';
+
 export async function playSong(id: string): Promise<void> {
     if (!S.byId.has(id)) return;
-    if (!S.deviceId) {
-        await openDevices();
-        if (!S.deviceId) return;
-    }
+    if (!S.deviceId) { toast(NO_PLAYER); return; }
     primeBeeper(); // sound is only allowed after a click, so unlock it now
     dispatch({ type: 'play', id });
 }
@@ -150,6 +145,26 @@ export function rateCurrent(r: number | null): void {
     dispatch({ type: 'rated', id, advance: !!r && S.opts.autoAdvance });
 }
 
+/** Toggles a tag on the playing song (the I and P keys). */
+export function toggleTagCurrent(tag: TagKey): void {
+    const id = S.pb.cur;
+    if (!id) return;
+    const on = !hasTag(id, tag);
+    setTag([id], tag, on);
+    updateRow(id);
+    renderSummary();
+    renderDeck();
+    const label = tagDef(tag).label.toLowerCase();
+    toast(on ? `Marked as ${label}` : `No longer marked ${label}`, { undo: () => toggleTagCurrentFor(id, tag, !on) });
+}
+
+function toggleTagCurrentFor(id: string, tag: TagKey, on: boolean): void {
+    setTag([id], tag, on);
+    updateRow(id);
+    renderSummary();
+    renderDeck();
+}
+
 /** Call after ratings change some other way (list stars, the bulk bar). */
 export function ratingsChanged(ids: string[]): void {
     const id = S.pb.cur;
@@ -162,9 +177,11 @@ export function ratingsChanged(ids: string[]): void {
 
 /** Turns a Spotify report into an event, matching the song to the open list. */
 function report({ id, uri, linked, paused, pos, dur }: PlayerSnapshot): void {
-    // Spotify may relink a song to a regional copy with a different id, so fall back to linked id and URI.
-    const tid = id && S.byId.has(id) ? id
-        : linked && S.byId.has(linked) ? linked
+    // When a song isn't available in your country, Spotify plays another copy of it (often from a
+    // different album) and says which song it was asked for in `linked`. Check that first: the copy
+    // may also be in the list, and matching it would jump to its place in the playlist.
+    const tid = linked && S.byId.has(linked) ? linked
+        : id && S.byId.has(id) ? id
             : [...S.byId.values()].find(t => t.uri === uri)?.id;
     dispatch({ type: 'spotify', id: tid ?? null, paused, pos: pos || 0, dur: dur || 0 });
 }
@@ -182,21 +199,19 @@ export function loadSDK(): Promise<boolean> {
             });
             p.addListener('ready', ({ device_id }) => {
                 S.sdk = p;
-                S.sdkDevice = device_id;
-                // Use the browser by default, unless the user picked another device last time.
-                if (!S.deviceId || S.deviceId === LS.get<string | null>(KEY.sdkDevice, null)) setDevice(device_id, 'This browser');
-                LS.set(KEY.sdkDevice, device_id);
+                S.deviceId = device_id;
                 finish(true);
             });
+            p.addListener('not_ready', () => { S.deviceId = null; });
             p.addListener('initialization_error', () => finish(false));
             p.addListener('authentication_error', () => finish(false));
             p.addListener('account_error', () => {
-                toast('Playing in the browser needs Spotify Premium. Choose another device from the menu.');
+                toast('Playing in the browser needs Spotify Premium.');
                 finish(false);
             });
             p.addListener('playback_error', ({ message }) => toast('Playback problem: ' + message));
             p.addListener('player_state_changed', st => {
-                if (!st || S.deviceId !== S.sdkDevice) return;
+                if (!st) return;
                 const ct = st.track_window?.current_track;
                 report({ id: ct?.id, uri: ct?.uri, linked: ct?.linked_from?.id, paused: st.paused, pos: st.position, dur: st.duration });
             });
@@ -211,24 +226,25 @@ export function loadSDK(): Promise<boolean> {
     });
 }
 
-export function setDevice(id: string | null, name?: string | null): void {
-    S.deviceId = id;
-    S.deviceName = name ?? null;
-    LS.set(KEY.device, id);
-    $('#deviceBtn').textContent = id ? 'Playing on: ' + (name || 'Spotify device') : 'Choose where to play';
-    if (S.pollTimer) clearInterval(S.pollTimer);
-    S.pollTimer = null;
-    if (id && id !== S.sdkDevice) S.pollTimer = window.setInterval(poll, 2500);
+/** Test mode has no browser player: it plays on a simulated speaker, and checks on it every few seconds. */
+export function useTestSpeaker(): void {
+    S.deviceId = MOCK_DEVICE;
+    if (!S.pollTimer) S.pollTimer = window.setInterval(poll, 2500);
 }
 
 /** For remote devices, Spotify doesn't push state, so check it every few seconds. */
 async function poll(): Promise<void> {
     if (document.hidden) return;
     try {
-        const st = await api<SpotifyPlaybackState | null>('/me/player');
-        if (!st?.item) return;
-        if (st.device?.id && st.device.id !== S.deviceId) return;
-        report({ id: st.item.id, uri: st.item.uri, paused: !st.is_playing, pos: st.progress_ms ?? 0, dur: st.item.duration_ms });
+        // market=from_token makes Spotify say when it has swapped in another copy of a song
+        const st = await api<SpotifyPlaybackState | null>('/me/player', { query: { market: 'from_token' } });
+        const onChosenDevice = !st?.device?.id || st.device.id === S.deviceId;
+        if (st?.item && onChosenDevice) {
+            report({ id: st.item.id, uri: st.item.uri, linked: st.item.linked_from?.id, paused: !st.is_playing, pos: st.progress_ms ?? 0, dur: st.item.duration_ms });
+        } else {
+            // Nothing is playing on the chosen device: nothing at all, or it's playing somewhere else.
+            dispatch({ type: 'spotify', id: null, paused: true, pos: curPos(), dur: 0 });
+        }
     } catch { /* try again next time */ }
 }
 
@@ -260,6 +276,8 @@ export function renderDeck(): void {
     st.dataset.r = String(r);
     st.querySelectorAll<HTMLElement>('.star').forEach(b => b.classList.toggle('on', r >= Number(b.dataset.v)));
 
+    $('#dTags').innerHTML = t ? tagsHtml(k => hasTag(t.id, k)) : '';
+
     $('#playIcon').innerHTML = mode === 'playing' ? PAUSE_PATH : PLAY_PATH;
     $('#playBtn').setAttribute('aria-label', mode === 'playing' ? 'Pause' : 'Play');
     $<HTMLButtonElement>('#playBtn').disabled = waiting;
@@ -281,29 +299,4 @@ export function renderSeek(): void {
     $('#tCur').textContent = fmt(p);
     $('#tDur').textContent = fmt(dur);
     $<HTMLInputElement>('#seek').value = String(dur ? Math.round((p / dur) * 1000) : 0);
-}
-
-/* ---------- Device picker ---------- */
-
-const waitClose = (dlg: HTMLDialogElement) =>
-    new Promise<void>(r => dlg.addEventListener('close', () => r(), { once: true }));
-
-export async function openDevices(): Promise<void> {
-    const dlg = $<HTMLDialogElement>('#devDlg');
-    if (!dlg.open) dlg.showModal();
-    const closed = waitClose(dlg);
-    const list = $('#devList');
-    list.innerHTML = '<p>Looking for devices…</p>';
-    let devs;
-    try { devs = await getDevices(); }
-    catch (e) { list.innerHTML = `<p>${esc(messageOf(e))}</p>`; return closed; }
-
-    if (S.sdkDevice && !devs.some(d => d.id === S.sdkDevice)) devs.unshift({ id: S.sdkDevice, name: 'This browser', type: 'Computer' });
-    list.innerHTML = devs.length
-        ? devs.map(d => {
-            const name = d.id === S.sdkDevice ? 'This browser' : d.name;
-            return `<button class="dev" data-id="${esc(d.id)}" data-name="${esc(name)}" aria-current="${d.id === S.deviceId}"><span>${esc(name)}</span><small>${esc(d.type)}</small></button>`;
-        }).join('')
-        : '<p>No devices found. Open Spotify on your phone or computer, then refresh.</p>';
-    return closed;
 }

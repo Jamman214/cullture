@@ -8,7 +8,7 @@ The page is one HTML file with three screens, and `show()` in `views.ts` display
 | Picker | `#picker` | Signed in, choosing a playlist | ⋯ menu |
 | Workspace | `#work` | A playlist is open | Change playlist, Cull…, ⋯ menu, player bar |
 
-The workspace stacks, top to bottom: the summary (title, counts, Resume button, progress bar), the sticky filter row, the bulk action bar when songs are selected, and the song list. The player bar is fixed to the bottom of the window. Four dialogs sit outside the screens: Cull, confirm, device choice, and a toast for messages.
+The workspace stacks, top to bottom: the summary (title, counts, Resume button, progress bar), the sticky filter row, and the song list. The player bar is fixed to the bottom of the window. When songs are selected, the selection bar slides up just above the player bar. It floats over the list rather than sitting in the page, so selecting never moves the rows. CSS variables `--deck-h` and `--bulk-space`, kept up to date by `updateBarSpace` in `list.ts`, give the list and toasts room for both bars. Four dialogs sit outside the screens: Cull, confirm, device choice, and a toast for messages.
 
 ## Static and generated HTML
 
@@ -24,6 +24,7 @@ The workspace stacks, top to bottom: the summary (title, counts, Resume button, 
 | Setup warnings | `showSetup` | views.ts |
 | Device list | `openDevices` | player.ts |
 | Star buttons | `starsHtml` | util.ts |
+| Tag icons in rows and the player bar | `tagsHtml` | tags.ts |
 | Notifications | `toast` | toast.ts |
 
 ## Rendering strategy

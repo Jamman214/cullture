@@ -10,7 +10,9 @@ Shortcuts work on the workspace screen, except while typing in the search box or
 | → / ← | Forward or back 15 seconds |
 | Shift + → / Shift + ← | Next or previous song |
 | N | Next song |
-| M | Jump to 45% through the song |
+| M | Jump to the middle of the song |
+| I | Mark or unmark the playing song as instrumental |
+| P | Mark or unmark the playing song as private |
 | / | Focus the search box |
 | Esc | Clear the selection |
 

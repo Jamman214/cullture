@@ -1,3 +1,5 @@
+import type { TagFilter, TagKey } from './tags';
+
 /** A song in the loaded playlist or Liked Songs, trimmed to what the app shows. */
 export interface Track {
     id: string;
@@ -31,11 +33,14 @@ export interface RatingEntry {
     r?: number;
     t?: number;
     p?: number;
+    /** Tags (see tags.ts). */
+    inst?: boolean;
+    hid?: boolean;
 }
 export type Ratings = Record<string, RatingEntry>;
 
 export type StatusFilter = 'all' | 'unplayed' | 'played';
-export type SortKey = 'order' | 'added' | 'title' | 'artist' | 'rdesc' | 'rasc' | 'dur';
+export type SortKey = 'order' | 'added' | 'title' | 'artist' | 'rdesc' | 'rasc' | 'dur' | 'shuffle';
 
 export interface Filter {
     q: string;
@@ -43,6 +48,8 @@ export interface Filter {
     /** '1'–'5' or 'none' for unrated. */
     ratings: Set<string>;
     sort: SortKey;
+    /** Tag chips that are switched on, and whether each hides or shows only its songs. */
+    tags: Map<TagKey, TagFilter>;
 }
 
 export interface Opts {
@@ -70,6 +77,8 @@ export interface Paging<T> {
 export interface SpotifyImage { url: string; width?: number | null; height?: number | null }
 export interface SpotifyTrack {
     id: string | null;
+    /** Set when Spotify played a different copy of the song than the one asked for (relinking). */
+    linked_from?: { id: string; uri?: string };
     uri: string;
     name: string;
     type?: string;
@@ -96,7 +105,6 @@ export interface SpotifyPlaylist {
     snapshot_id?: string;
 }
 export interface SpotifyUser { id: string; display_name?: string }
-export interface SpotifyDevice { id: string; name: string; type: string; is_active?: boolean }
 export interface SpotifyPlaybackState {
     is_playing: boolean;
     progress_ms: number | null;

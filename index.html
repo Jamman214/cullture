@@ -22,7 +22,10 @@
             </svg>Cullture</div>
         <span class="badge" id="mockBadge" hidden
             title="Started with npm run dev:mock. Nothing here touches Spotify.">Test data</span>
-        <button class="btn" id="switchBtn" hidden>Change playlist</button>
+        <button class="btn" id="switchBtn" hidden aria-label="Change playlist"><svg viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M4 6h16M4 12h16M4 18h10" />
+            </svg><span class="label">Change playlist</span></button>
         <div class="spacer"></div>
         <button class="btn danger" id="cullBtn" hidden>Cull…</button>
         <div class="menu-wrap" id="menuWrap" hidden>
@@ -33,8 +36,6 @@
                     <circle cx="19" cy="12" r="2" fill="currentColor" />
                 </svg></button>
             <div class="menu" id="menu" hidden>
-                <button data-act="device" id="deviceBtn">Choose playback device</button>
-                <div class="menu-sep"></div>
                 <p class="menu-head">Preferences</p>
                 <label class="menu-check"><input type="checkbox" id="optSkip"> Skip songs already rated</label>
                 <label class="menu-check"><input type="checkbox" id="optAdvance"> Go to next song after rating</label>
@@ -92,8 +93,7 @@
                 <div class="legend" id="legend"></div>
             </div>
             <div class="filters">
-                <input type="search" class="input" id="q" placeholder="Search title, artist or album"
-                    aria-label="Search">
+                <input type="search" class="input" id="q" placeholder="Search songs" aria-label="Search">
                 <div class="seg" id="status" role="group" aria-label="Played status">
                     <button data-s="all" aria-pressed="true">All</button><button data-s="unplayed"
                         aria-pressed="false">Not played</button><button data-s="played"
@@ -108,17 +108,53 @@
                     <option value="rdesc">Rating, high to low</option>
                     <option value="rasc">Rating, low to high</option>
                     <option value="dur">Longest first</option>
+                    <option value="shuffle">Random order</option>
                 </select>
+                <button class="icon-btn" id="reshuffle" hidden aria-label="Shuffle again" title="Shuffle again"><svg
+                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
+                    </svg></button>
             </div>
-            <div class="bulk" id="bulk" hidden>
-                <b id="bulkCount"></b>
-                <button class="btn" id="selShown">Select all shown</button>
-                <span>Rate all:</span>
-                <div class="stars" id="bulkStars"></div>
-                <button class="btn" id="bulkClear">Clear ratings</button>
-                <button class="btn" id="bulkPlay">Play selected</button>
-                <button class="btn danger" id="bulkRemove">Remove…</button>
-                <button class="btn" id="bulkNone">Deselect</button>
+            <div class="bulk" id="bulk" role="toolbar" aria-label="Selected songs" inert>
+                <div class="bulk-sel">
+                    <button class="icon-btn" id="bulkNone" aria-label="Deselect all" title="Deselect all (Esc)"><svg
+                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                            stroke-linecap="round">
+                            <path d="M6 6l12 12M18 6L6 18" />
+                        </svg></button>
+                    <b id="bulkCount"></b>
+                    <button class="linkish" id="selShown">Select all</button>
+                </div>
+                <span class="bulk-sep" aria-hidden="true"></span>
+                <div class="bulk-rate">
+                    <span class="bulk-label">Rate</span>
+                    <div class="stars" id="bulkStars"></div>
+                </div>
+                <div class="bulk-acts">
+                    <button class="btn ghost tag-toggle-btn" data-tag="inst" aria-pressed="false"
+                        aria-label="Instrumental" title="Instrumental (I)"><svg class="tag-icon" viewBox="0 0 24 24"
+                            aria-hidden="true">
+                            <path fill="currentColor"
+                                d="M9 17.5V6.2l10-2.2v11.3a2.6 2.6 0 1 1-1.6-2.4V7.1L10.6 8.6v9.1A2.6 2.6 0 1 1 9 17.5z" />
+                        </svg></button>
+                    <button class="btn ghost tag-toggle-btn" data-tag="hid" aria-pressed="false" aria-label="Hidden"
+                        title="Hidden (H)"><svg class="tag-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="M3 3l18 18M10.6 5.1A10.4 10.4 0 0 1 12 5c5.5 0 9 5 9.8 7a14 14 0 0 1-3 4.1M6.6 6.6C4.5 8 3 10.2 2.2 12c.8 2 4.3 7 9.8 7a9.9 9.9 0 0 0 4.4-1M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+                        </svg></button>
+                    <button class="btn ghost" id="bulkClear"><span>Clear<span class="long">
+                                rating</span></span></button>
+                    <button class="btn ghost" id="bulkPlay"><svg viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M7 4v16l13-8z" />
+                        </svg>Play</button>
+                    <button class="btn ghost danger" id="bulkRemove" aria-label="Remove selected songs"
+                        title="Remove selected songs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+                        </svg><span class="remove-label">Remove…</span></button>
+                </div>
             </div>
             <div class="thead"><input type="checkbox" id="master" aria-label="Select all shown"><span
                     class="n">#</span><span></span><span>Title</span><span class="al">Album</span><span class="pl-h"
@@ -133,7 +169,10 @@
                 <div class="d-art" id="dArt"></div>
                 <div class="d-meta">
                     <div class="d-text">
-                        <div class="d-title" id="dTitle">Nothing playing</div>
+                        <div class="d-title-line">
+                            <div class="d-title" id="dTitle">Nothing playing</div><span class="d-tags"
+                                id="dTags"></span>
+                        </div>
                         <div class="d-artist" id="dArtist">Press Resume or play any song</div>
                     </div>
                 </div>
@@ -200,15 +239,6 @@
         <p id="cfText"></p>
         <div class="row-actions"><button class="btn" id="cfNo">Cancel</button><button class="btn danger solid"
                 id="cfYes"></button></div>
-    </dialog>
-
-    <dialog id="devDlg">
-        <h2>Where should songs play?</h2>
-        <p>Playing in this browser needs Spotify Premium and a desktop browser. To use your phone or the Spotify app
-            instead, open Spotify there first so it shows up below.</p>
-        <div id="devList"></div>
-        <div class="row-actions"><button class="btn" id="devRefresh">Refresh list</button><button class="btn"
-                id="devClose">Close</button></div>
     </dialog>
 
     <div class="toast" id="toast" role="status" hidden></div>

@@ -47,3 +47,7 @@ Spotify changed the Web API for apps in Development Mode in February 2026, and t
 - Only playlists you own or collaborate on return their songs. Others show greyed out on the picker.
 - Library removal moved to `/me/library`. The fallbacks keep older endpoints working if the new ones fail.
 - Per-request limits were lowered, hence the small write batches.
+
+## Relinking
+
+When a song isn't available in your country, Spotify plays another copy of it, often from a different album, and reports which song it was asked for as `linked_from`. Cullture matches reports by that first, then by the song's own ID, then by URI. The copy may also be in the playlist, and matching it instead would move playback to the copy's place in the list. Requests for the current playback state include `market=from_token` so Spotify includes `linked_from`.

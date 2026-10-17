@@ -29,8 +29,6 @@ export const KEY = {
     state: P + 'state',
     ratings: P + 'ratings',
     opts: P + 'opts',
-    device: P + 'device',
-    sdkDevice: P + 'sdkDevice',
     lastSource: P + 'lastSource',
     progress: (sourceId: string) => `${P}prog:${sourceId}`,
     cache: (sourceId: string) => `${P}cache:${sourceId}`

@@ -33,14 +33,14 @@ One typeface, Bricolage Grotesque from Google Fonts, with a system sans-serif fa
 ## Layout
 
 - Content is centred at up to 1180 px wide.
-- The top bar, filter row and bulk bar stay pinned while the list scrolls; the player bar is fixed to the bottom.
+- The top bar and filter row stay pinned while the list scrolls; the player bar is fixed to the bottom, with the selection bar floating just above it when songs are selected.
 - Song rows are a nine-column grid: checkbox, number, cover, title and artist, album, played dot, length, stars, play button.
 - Shapes are rounded: pill buttons and chips, 10 px rows, 14–16 px cards and dialogs.
 - Safe-area padding keeps content clear of phone notches and home bars.
 
 ## Small screens
 
-Below 820 px wide, rows drop to five columns (checkbox, cover, title, stars, play), hiding number, album, played dot and length. The player bar stacks into rows with larger 44 px stars for touch, and the bulk bar stops being sticky.
+Below 820 px wide, rows drop to five columns (checkbox, cover, title, stars, play), hiding number, album, played dot and length. The player bar stacks into rows with larger 44 px stars for touch. Below 600 px the selection bar splits into two rows (what's selected, then stars and actions), shortens Clear rating to Clear, and shows Remove as a bin icon. The top bar shows Change playlist as an icon, and below 420 px hides the test-mode badge, so every button stays on screen.
 
 ## Motion and accessibility
 

@@ -92,6 +92,7 @@ const END_MARGIN = 400;
 const REPORT_MARGIN = 2000;
 /** How long to ignore reports about other songs after asking Spotify to play one. */
 const EXPECT_MS = 4000;
+const DIDNT_START = 'Nothing started playing. Press play to try again.';
 
 export const position = (s: Playback, now: number): number =>
     s.mode === 'playing' ? Math.min(s.dur, s.pos + (now - s.at)) : s.pos;
@@ -201,9 +202,11 @@ function ended(s: Playback, c: Context): Result {
 /** Brings the state in line with what Spotify reports. */
 function report(s: Playback, e: Extract<PlaybackEvent, { type: 'spotify' }>, c: Context): Result {
     let expect = s.expect;
+    let didntStart = false;
     if (expect) {
-        if (e.id === expect.id || c.now >= expect.until) expect = null;
-        else return [s, []]; // still about the previous song; Spotify hasn't switched yet
+        if (e.id === expect.id) expect = null;
+        else if (c.now < expect.until) return [s, []]; // still about the previous song; Spotify hasn't switched yet
+        else { expect = null; didntStart = e.paused; } // gave up waiting: the device never started the song
     }
     const s2 = expect === s.expect ? s : { ...s, expect };
     const sameSong = !e.id || e.id === s.cur;
@@ -224,6 +227,9 @@ function report(s: Playback, e: Extract<PlaybackEvent, { type: 'spotify' }>, c: 
             alone: changed ? false : s.alone, // Spotify moved on by itself, so this song wasn't queued alone
             expect
         },
-        changed ? [{ kind: 'played', id: cur }] : []
+        [
+            ...(changed ? [{ kind: 'played', id: cur } as Effect] : []),
+            ...(didntStart ? [{ kind: 'toast', text: DIDNT_START } as Effect] : [])
+        ]
     ];
 }

@@ -2,7 +2,7 @@
 import { api, statusOf } from './api';
 import { LIKED_BATCH, PAGE, WRITE_BATCH } from './config';
 import type {
-    Paging, Source, SpotifyDevice, SpotifyListItem, SpotifyPlaylist, SpotifyUser, Track
+    Paging, Source, SpotifyListItem, SpotifyPlaylist, SpotifyUser, Track
 } from './types';
 import { chunk } from './util';
 
@@ -103,8 +103,4 @@ export async function createPlaylist(me: SpotifyUser, name: string, uris: string
         await api(`/playlists/${pl.id}/items`, { method: 'POST', body: { uris: part } });
     }
     return pl;
-}
-
-export async function getDevices(): Promise<SpotifyDevice[]> {
-    return (await api<{ devices?: SpotifyDevice[] }>('/me/player/devices')).devices || [];
 }

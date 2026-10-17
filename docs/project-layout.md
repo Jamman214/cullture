@@ -20,6 +20,7 @@ Each module owns one concern. Spotify network code sits in three files, and only
 | `src/player.ts` | Runs the state machine, talks to Spotify's player, draws the player bar, device dialog | `dispatch`, `playSong`, `togglePlay`, `rateCurrent` |
 | `src/beeper.ts` | The reminder beep for **Wait for a rating** | `setBeeping`, `primeBeeper` |
 | `src/cache.ts` | Saved copies of playlists' songs | `loadCached`, `saveCached`, `isStale` |
+| `src/tags.ts` | Song tags (instrumental, private): names, keys and icons | `TAGS`, `tagsHtml` |
 | `src/views.ts` | Switching screens, setup screen, playlist picker, opening a playlist | `show`, `renderPicker`, `openSource` |
 | `src/cull.ts` | Cull dialog, confirm dialog, keepers playlist, ratings export and import | `openCull`, `removeTracks`, `exportRatings` |
 | `src/mock/data.ts` | The test library for test mode: songs, playlists, covers | `buildLibrary` |
@@ -62,6 +63,7 @@ flowchart TD
         playback["playback.ts<br/>Playback rules"]
         beeper["beeper.ts<br/>Reminder beep"]
         cache["cache.ts<br/>Saved playlists"]
+        tags["tags.ts<br/>Song tags"]
     end
 
     main --> features

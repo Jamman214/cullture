@@ -17,6 +17,7 @@
 | Colours or rating colours | Tokens on `:root` in `styles.css` |
 | A filter or sort option | `computeView` in `list.ts`, plus its control: rating chips in `CHIPS` in `list.ts`, status buttons and sort options in `index.html` |
 | Keyboard shortcuts | `bindKeys` in `main.ts` |
+| Add a tag | Add it to `TAGS` and `TagKey` in `tags.ts`, a field to `RatingEntry` in `types.ts`, and a toggle button in the selection bar in `index.html` |
 | What Resume picks | `resumeTarget` in `list.ts` |
 | What playback does when a song ends, or what a button does in each mode | `transition` in `playback.ts` |
 | How far ahead playback queues, or skip rules | `orderFrom` in `player.ts` |
