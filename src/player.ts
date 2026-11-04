@@ -88,6 +88,7 @@ async function sendPlay(id: string, alone: boolean, positionMs: number): Promise
     const body = ctx ? { context_uri: ctx, offset: { uri: uris[0] } } : { uris };
     try {
         await api('/me/player/play', { method: 'PUT', query: { device_id: device }, body: { ...body, position_ms: Math.round(positionMs) } });
+        if (ctx) await syncRepeat(device);
     } catch (e) {
         const s = statusOf(e);
         // 404 or 5xx (e.g. Bad gateway): the Spotify app went to sleep; look for it again next time
@@ -103,11 +104,22 @@ async function sendPlay(id: string, alone: boolean, positionMs: number): Promise
 }
 
 /**
- * The playlist to play from when playing through the Spotify app, or null to send songs directly
- * (the browser player, and Liked Songs, which has no playlist to point at).
+ * The playlist (or Liked Songs) to play from when playing through the Spotify app, or null for
+ * the browser player, which is sent the songs directly.
  */
-const playlistContext = (): string | null =>
-    !S.sdk && S.source && !S.source.liked ? `spotify:playlist:${S.source.id}` : null;
+function playlistContext(): string | null {
+    if (S.sdk || !S.source) return null;
+    if (!S.source.liked) return `spotify:playlist:${S.source.id}`;
+    return S.me ? `spotify:user:${S.me.id}:collection` : null;
+}
+
+/**
+ * Phones freeze the app in the background, so it can't stop Spotify at the end of a song. While
+ * waiting for ratings, have Spotify repeat the song instead of moving on; the app pauses it on return.
+ */
+async function syncRepeat(device: string): Promise<void> {
+    await api('/me/player/repeat', { method: 'PUT', query: { state: S.opts.waitForRating ? 'track' : 'off', device_id: device } }).catch(() => { /* not worth a toast */ });
+}
 
 /** Pause, resume or seek, through the browser player or the Web API. `failMessage` reports errors. */
 async function control(viaSdk: () => Promise<void>, path: string, query: Record<string, number> = {}, failMessage?: string): Promise<void> {
@@ -143,7 +155,11 @@ export const curPos = () => position(S.pb, Date.now());
 export const seekTo = (ms: number) => dispatch({ type: 'seek', ms });
 export const seekBy = (deltaMs: number) => seekTo(curPos() + deltaMs);
 export const seekToFraction = (f: number) => seekTo(S.pb.dur * f);
-export const prefsChanged = () => { primeBeeper(); dispatch({ type: 'prefsChanged' }); };
+export const prefsChanged = () => {
+    primeBeeper();
+    dispatch({ type: 'prefsChanged' });
+    if (playlistContext() && S.deviceId && S.pb.mode !== 'idle') void syncRepeat(S.deviceId);
+};
 
 /** Rates the current song from the player bar or a number key. */
 export function rateCurrent(r: number | null): void {

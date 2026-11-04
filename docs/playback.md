@@ -14,6 +14,7 @@ Songs play either in the browser tab or on another Spotify device. Playback is r
 | `dur` | The current song's length |
 | `alone` | Spotify was given only this song, so the app has to start the next one itself |
 | `expect` | A song just requested from Spotify; reports about other songs are ignored until it starts, for up to 4 s |
+| `hold` | Just seeked; for 2 s, reports about the same song are ignored so an older position doesn't flick the seek bar back |
 
 | Mode | Means | Play button |
 | --- | --- | --- |
@@ -68,6 +69,8 @@ Starting a song gives Spotify the next 50 songs to follow, so it keeps going by 
 3. Songs after the chosen one, minus already-rated songs when **Skip songs already rated** is on.
 
 With **Wait for a rating** on, Spotify is given only the one song, so it can't move on before you rate it.
+
+Through the Spotify app, the app instead asks Spotify to play the playlist (or Liked Songs) from the chosen song, since iPhones go silent when sent a bare list of songs. Spotify would then carry on in playlist order, so the app starts each next song itself. Phones freeze the app in the background, so with **Wait for a rating** on Spotify is set to repeat the song; on return the app notices the song is over by its clock, pauses and waits.
 
 ## Spotting the end of a song
 

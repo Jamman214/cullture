@@ -36,6 +36,8 @@ export interface Playback {
     alone: boolean;
     /** A song we've just asked Spotify to play; reports about other songs are ignored until it starts. */
     expect: { id: string; until: number } | null;
+    /** Just seeked: until this time, Spotify's reports about this song may still carry the old position. */
+    hold?: number;
 }
 
 export const initialPlayback: Playback = {
@@ -95,6 +97,8 @@ const END_MARGIN = 400;
 const REPORT_MARGIN = 2000;
 /** How long to ignore reports about other songs after asking Spotify to play one. */
 const EXPECT_MS = 4000;
+/** Long enough for a status check already on its way when you seek to come back. */
+const HOLD_MS = 2000;
 const DIDNT_START = 'Nothing started playing. Press play to try again.';
 
 export const position = (s: Playback, now: number): number =>
@@ -133,7 +137,7 @@ export function transition(s: Playback, e: PlaybackEvent, c: Context): Result {
                 if (ms >= s.dur - 1000) return [s, []];
                 return start(s.cur, ms, c);
             }
-            return [{ ...s, pos: ms, at: c.now }, [{ kind: 'seek', ms }]];
+            return [{ ...s, pos: ms, at: c.now, hold: c.now + HOLD_MS }, [{ kind: 'seek', ms }]];
         }
 
         case 'tick':
@@ -218,8 +222,13 @@ function report(s: Playback, e: Extract<PlaybackEvent, { type: 'spotify' }>, c: 
     const s2 = expect === s.expect ? s : { ...s, expect };
     const sameSong = !e.id || e.id === s.cur;
 
+    // Just seeked: an older report would flick the position back to where it was.
+    if (sameSong && s.hold && c.now < s.hold && e.paused === (s.mode === 'paused')) return [s2, []];
+
     // Spotify pausing right at the end of the song means it finished.
     if (e.paused && sameSong && endsNow(s2, c, REPORT_MARGIN)) return ended(s2, c);
+    // By the app's clock the song is over, but Spotify is repeating it (the app was frozen in the background).
+    if (!e.paused && sameSong && endsNow(s2, c, END_MARGIN)) return ended(s2, c);
 
     // After a failure, stay stopped until something actually plays.
     if (s.mode === 'idle' && s.cur && e.paused) return [s2, []];

@@ -71,12 +71,19 @@ describe('playing through the Spotify app (no browser player, as on phones)', ()
         expect(lastBody()).toEqual({ context_uri: 'spotify:playlist:pl', offset: { uri: 'spotify:track:b' }, position_ms: 0 });
         expect(S.pb.alone).toBe(true);
     });
-    it('sends the songs directly for Liked Songs, which has no playlist to play from', async () => {
+    it('plays Liked Songs from your collection', async () => {
         S.source = { ...S.source!, id: 'liked', liked: true };
+        S.me = { id: 'me' };
         S.deviceId = 'ph';
-        S.opts.waitForRating = false;
         await playSong('b');
-        expect(await sentToSpotify()).toEqual(['b', 'c', 'd', 'e']);
+        await vi.waitFor(() => expect(lastBody()).toBeTruthy());
+        expect(lastBody()).toMatchObject({ context_uri: 'spotify:user:me:collection', offset: { uri: 'spotify:track:b' } });
+    });
+    it.each([[true, 'track'], [false, 'off']])('with wait for a rating %s, sets Spotify to repeat %s so it can\'t move on while the app is frozen', async (wait, state) => {
+        S.deviceId = 'ph';
+        S.opts.waitForRating = wait;
+        await playSong('b');
+        await vi.waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith('/me/player/repeat', expect.objectContaining({ query: { state, device_id: 'ph' } })));
     });
     const devices = (...list: object[]) => vi.mocked(api).mockImplementation(async path =>
         path === '/me/player/devices' ? { devices: list } : null);

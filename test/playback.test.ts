@@ -125,6 +125,12 @@ describe('seek', () => {
         expect(s).toMatchObject({ mode: 'playing', cur: 'a', pos: 185_000 });
         expect(fx).toContainEqual(expect.objectContaining({ kind: 'play', id: 'a', position: 185_000 }));
     });
+    it("ignores Spotify's older position for a moment after seeking, then follows it again", () => {
+        const [s] = transition(playing(), { type: 'seek', ms: 50_000 }, ctx());
+        const stale = { type: 'spotify', id: 'a', paused: false, pos: 10_000, dur: 200_000 } as const;
+        expect(transition(s, stale, ctx({ now: 101_000 }))[0]).toBe(s);
+        expect(transition(s, stale, ctx({ now: 103_000 }))[0].pos).toBe(10_000);
+    });
     it('ignores skipping forward while waiting, since the song is already over', () => {
         const before = playing({ mode: 'waiting', pos: 200_000 });
         expect(transition(before, { type: 'seek', ms: 215_000 }, ctx())[0]).toBe(before);
@@ -157,6 +163,12 @@ describe('the end of a song (tick)', () => {
     it('stops at the end of the list', () => {
         const [s] = transition(atEnd({ cur: 'd', alone: true }), { type: 'tick' }, ctx());
         expect(s.mode).toBe('ended');
+    });
+    it('waits when coming back to a song Spotify has been repeating in the background', () => {
+        const [s, fx] = transition(atEnd({ alone: true }), { type: 'spotify', id: 'a', paused: false, pos: 30_000, dur: 200_000 },
+            ctx({ now: 160_000, waitForRating: true }));
+        expect(s.mode).toBe('waiting');
+        expect(kinds(fx)).toEqual(['pause']);
     });
     it('moves on when a song gets rated some other way while waiting', () => {
         const [s] = transition(playing({ mode: 'waiting' }), { type: 'tick' }, ctx({ isRated: () => true }));

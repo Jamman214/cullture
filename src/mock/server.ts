@@ -34,6 +34,7 @@ const snapshotOf = (p: MockPlaylist) => `${p.id}-${revs.get(p.id) ?? 0}`;
 const bump = (p: MockPlaylist) => { revs.set(p.id, (revs.get(p.id) ?? 0) + 1); return snapshotOf(p); };
 
 /** Simulated playback: a queue of URIs, the current index, and position at time `at`. */
+let repeatTrack = false;
 let player: { uris: string[]; index: number; playing: boolean; pos: number; at: number } | null = null;
 
 const json = (status: number, body?: unknown, headers: Record<string, string> = {}) =>
@@ -70,6 +71,7 @@ function tick(): void {
         for (; ;) {
             const d = byUri.get(player.uris[player.index])?.duration_ms ?? 0;
             if (pos < d) break;
+            if (repeatTrack && d) { pos -= d; continue; }
             if (player.index >= player.uris.length - 1) { pos = 0; player.playing = false; break; }
             pos -= d;
             player.index++;
@@ -150,12 +152,16 @@ export async function mockFetch(method: string, rawUrl: string, payload?: string
             case 'PUT /me/player/play':
                 if (data.context_uri) {
                     const p = lib.playlists.find(x => `spotify:playlist:${x.id}` === data.context_uri);
-                    if (!p) return fail(404, 'Context not found');
-                    const uris = p.items.flatMap(e => (e.item ? [e.item.uri] : []));
+                    const liked = data.context_uri === `spotify:user:${lib.me.id}:collection`;
+                    if (!p && !liked) return fail(404, 'Context not found');
+                    const uris = p ? p.items.flatMap(e => (e.item ? [e.item.uri] : [])) : lib.liked.map(l => l.track.uri);
                     player = { uris, index: Math.max(0, uris.indexOf(data.offset?.uri ?? '')), playing: true, pos: data.position_ms ?? 0, at: Date.now() };
                 } else if (data.uris?.length) player = { uris: data.uris, index: 0, playing: true, pos: data.position_ms ?? 0, at: Date.now() };
                 else if (player) player.playing = true;
                 else return fail(404, 'No active device');
+                return json(204);
+            case 'PUT /me/player/repeat':
+                repeatTrack = url.searchParams.get('state') === 'track';
                 return json(204);
             case 'PUT /me/player/pause':
                 if (player) player.playing = false;
