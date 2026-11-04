@@ -57,7 +57,7 @@ describe('what gets sent to Spotify', () => {
         await playSong('a');
         await vi.waitFor(() => expect(document.querySelector('#toast')?.textContent).toMatch(/Open the Spotify app/));
         expect(vi.mocked(api)).not.toHaveBeenCalledWith('/me/player/play', expect.anything());
-        expect(S.pb.mode).toBe('paused');
+        expect(S.pb.mode).toBe('idle');
     });
 });
 

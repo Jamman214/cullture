@@ -14,6 +14,7 @@
  *                  waiting ──"wait for a rating" turned off──▶ ended
  *
  *   A song ending with nothing left to play also goes to ended.
+ *   A failed Spotify request goes back to idle; play then starts the song again.
  *   From ended, play or next starts the next song.
  *
  * The UI is drawn from this state (player.ts renderDeck), and the reminder beep is
@@ -106,7 +107,8 @@ export function transition(s: Playback, e: PlaybackEvent, c: Context): Result {
             switch (s.mode) {
                 case 'playing': return [{ ...s, mode: 'paused', pos: position(s, c.now), at: c.now }, [{ kind: 'pause' }]];
                 case 'paused': return [{ ...s, mode: 'playing', at: c.now }, [{ kind: 'resume' }]];
-                case 'idle':
+                // After a failed request Spotify may not have the song, so start it again, not resume.
+                case 'idle': return s.cur ? start(s.cur, s.pos, c) : advance(s, c);
                 case 'ended': return advance(s, c);
                 case 'waiting': return [s, []]; // rate the song, or seek back, to carry on
             }
@@ -156,7 +158,7 @@ export function transition(s: Playback, e: PlaybackEvent, c: Context): Result {
 
         case 'failed':
             return [
-                { ...s, mode: s.cur ? 'paused' : 'idle', pos: position(s, c.now), at: c.now, expect: null },
+                { ...s, mode: 'idle', pos: position(s, c.now), at: c.now, expect: null },
                 [{ kind: 'toast', text: e.message }]
             ];
     }
@@ -213,6 +215,9 @@ function report(s: Playback, e: Extract<PlaybackEvent, { type: 'spotify' }>, c: 
 
     // Spotify pausing right at the end of the song means it finished.
     if (e.paused && sameSong && endsNow(s2, c, REPORT_MARGIN)) return ended(s2, c);
+
+    // After a failure, stay stopped until something actually plays.
+    if (s.mode === 'idle' && s.cur && e.paused) return [s2, []];
 
     // A finished song stays finished, unless a different song has started playing.
     if ((s.mode === 'waiting' || s.mode === 'ended') && (sameSong || e.paused)) return [s2, []];

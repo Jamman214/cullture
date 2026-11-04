@@ -195,10 +195,21 @@ describe('prefsChanged', () => {
 });
 
 describe('failed', () => {
-    it('pauses and says what went wrong', () => {
+    it('stops and says what went wrong', () => {
         const [s, fx] = transition(playing({ expect: { id: 'a', until: 1e9 } }), { type: 'failed', message: 'Nope' }, ctx());
-        expect(s).toMatchObject({ mode: 'paused', expect: null });
+        expect(s).toMatchObject({ mode: 'idle', cur: 'a', expect: null });
         expect(toast(fx)).toBe('Nope');
+    });
+    it('play then starts the same song again, not resume (Spotify may not have it)', () => {
+        const [failed] = transition(playing({ pos: 30_000, at: 100_000 }), { type: 'failed', message: 'x' }, ctx());
+        const [s, fx] = transition(failed, { type: 'toggle' }, ctx());
+        expect(s).toMatchObject({ mode: 'playing', cur: 'a' });
+        expect(fx).toContainEqual(expect.objectContaining({ kind: 'play', id: 'a', position: 30_000 }));
+    });
+    it('a paused report from Spotify does not undo the failure', () => {
+        const [failed] = transition(playing(), { type: 'failed', message: 'x' }, ctx());
+        const report = { type: 'spotify' as const, id: null, paused: true, pos: 0, dur: 0 };
+        expect(transition(failed, report, ctx())[0]).toBe(failed);
     });
     it('stays idle if nothing was playing', () => {
         expect(transition(initialPlayback, { type: 'failed', message: 'x' }, ctx())[0].mode).toBe('idle');
