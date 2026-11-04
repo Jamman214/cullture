@@ -1,7 +1,7 @@
 import './styles.css';
 import { messageOf } from './api';
 import { SignedOutError, getClientId, handleRedirect, hasToken, login, setClientId, signOut } from './auth';
-import { KEY, MOCK, REDIRECT } from './config';
+import { BUILT_IN_ID, KEY, MOCK, REDIRECT } from './config';
 import { exportRatings, importRatings, openCull, refreshCull, removeTracks, reviewCull, cullIds, saveKeepers } from './cull';
 import { clickSelect, renderBulk, renderList, renderSummary, reshuffle, resumeTarget, syncSelDom, toggleSel, updateBarSpace, updateRow } from './list';
 import {
@@ -41,6 +41,7 @@ const closest = <T extends Element = HTMLElement>(e: Event, sel: string) =>
 
 function bindSetup(): void {
     $('#copyRedirect').onclick = () => { void navigator.clipboard?.writeText(REDIRECT).then(() => toast('Redirect URI copied.')); };
+    $('#signInBtn').onclick = () => void login();
     $('#connectBtn').onclick = () => {
         const id = $<HTMLInputElement>('#clientId').value.trim();
         if (!/^[0-9a-f]{32}$/i.test(id)) {
@@ -302,10 +303,13 @@ async function init(): Promise<void> {
     } else {
         void loadSDK();
     }
+    $('[data-act="clientid"]').hidden = !!BUILT_IN_ID;
 
     const last = LS.get<string | null>(KEY.lastSource, null);
     if (last && S.sources.some(s => s.id === last && s.readable)) void openSource(last);
     else renderPicker();
 }
 
+// Ask the browser not to evict ratings/cache under storage pressure (matters on iOS).
+void navigator.storage?.persist?.();
 void init();

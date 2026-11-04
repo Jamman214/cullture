@@ -6,6 +6,8 @@ export const API = 'https://api.spotify.com/v1';
 export const ACCOUNTS = 'https://accounts.spotify.com';
 export const SDK_URL = 'https://sdk.scdn.co/spotify-player.js';
 export const REDIRECT = location.origin + location.pathname;
+/** Set VITE_CLIENT_ID when building a hosted copy so only your own Spotify app can be used. */
+export const BUILT_IN_ID: string = import.meta.env.VITE_CLIENT_ID ?? '';
 
 export const SCOPES = [
     'user-library-read', 'user-library-modify',

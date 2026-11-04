@@ -1,4 +1,4 @@
-import { ACCOUNTS, KEY, MOCK, REDIRECT, SCOPES } from './config';
+import { ACCOUNTS, BUILT_IN_ID, KEY, MOCK, REDIRECT, SCOPES } from './config';
 import { LS } from './util';
 
 interface StoredToken { access: string; refresh?: string; exp: number }
@@ -17,7 +17,7 @@ const randStr = (n: number) => {
     return b64url(a).slice(0, n);
 };
 
-export const getClientId = () => (MOCK ? 'mock' : LS.get<string | null>(KEY.clientId, null));
+export const getClientId = () => (MOCK ? 'mock' : BUILT_IN_ID || LS.get<string | null>(KEY.clientId, null));
 export const setClientId = (id: string) => LS.set(KEY.clientId, id);
 export const hasToken = () => MOCK || !!LS.get<StoredToken | null>(KEY.token, null);
 export const signOut = () => LS.del(KEY.token);

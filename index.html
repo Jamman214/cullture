@@ -58,7 +58,8 @@
                 each a 1–5 star rating, then remove the ones you don't want. Ratings and progress are saved in this
                 browser.</p>
             <div class="warn" id="hostWarn" hidden></div>
-            <ol>
+            <button class="btn primary" id="signInBtn" hidden>Connect Spotify</button>
+            <ol id="setupSteps">
                 <li>Open the <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">Spotify
                         Developer Dashboard</a> and create an app. Tick <b>Web API</b> and <b>Web Playback SDK</b>.</li>
                 <li>Add this exact Redirect URI to the app settings:
