@@ -1627,3 +1627,16 @@ dialog .row-actions {
         max-width: 45%
     }
 }
+
+@media (pointer: coarse) {
+    /* iOS zooms into any text box under 16px when tapped */
+    .input {
+        font-size: 16px
+    }
+
+    /* Safari hangs (taps stop working, rows stop drawing) when focusing the search or sort
+       scrolls a page of content-visibility rows. Costs some speed on very long lists. */
+    .row {
+        content-visibility: visible
+    }
+}

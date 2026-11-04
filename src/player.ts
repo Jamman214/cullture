@@ -189,6 +189,9 @@ function report({ id, uri, linked, paused, pos, dur }: PlayerSnapshot): void {
     dispatch({ type: 'spotify', id: tid ?? null, paused, pos: pos || 0, dur: dur || 0 });
 }
 
+/** Our browser player's device name. Other tabs' players show up in the device list under it. */
+const SDK_NAME = 'Cullture (this browser)';
+
 /** Settles once the browser player is ready (true) or has failed to start (false). */
 let sdkLoading = Promise.resolve(false);
 
@@ -199,7 +202,7 @@ export function loadSDK(): Promise<boolean> {
 
         window.onSpotifyWebPlaybackSDKReady = () => {
             const p = new Spotify.Player({
-                name: 'Cullture (this browser)',
+                name: SDK_NAME,
                 volume: 0.8,
                 getOAuthToken: cb => { getToken().then(cb).catch(() => { /* signed out */ }); }
             });
@@ -240,7 +243,8 @@ async function findDevice(): Promise<string | null> {
     await sdkLoading;
     if (S.deviceId) return S.deviceId;
     const res = await api<{ devices?: SpotifyDevice[] } | null>('/me/player/devices');
-    const usable = (res?.devices ?? []).filter(d => d.id && !d.is_restricted);
+    // Skip browser players from other tabs (e.g. a laptop): they'd play silently somewhere else.
+    const usable = (res?.devices ?? []).filter(d => d.id && !d.is_restricted && d.name !== SDK_NAME);
     const d = usable.find(x => x.is_active) ?? usable.find(x => x.type === 'Smartphone') ?? usable[0];
     if (!d) return null;
     S.deviceId = d.id;

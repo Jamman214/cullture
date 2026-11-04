@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { clickSelect, computeView, reshuffle, resumeTarget, toggleSel } from '../src/list';
+import { clickSelect, computeView, renderList, reshuffle, resumeTarget, rowEl, showMore, toggleSel } from '../src/list';
 import { S, markPlayed, setRating, setTag } from '../src/state';
 import { reset, track } from './helpers';
+import { $ } from '../src/util';
 
 const ids = () => S.view.map(t => t.id);
 
@@ -159,5 +160,22 @@ describe('selecting with checkboxes', () => {
         expect([...S.sel].sort()).toEqual(['a', 'c']);
         toggleSel('d', true, true);
         expect([...S.sel].sort()).toEqual(['a', 'c', 'd']);
+    });
+});
+
+describe('rendering a long list in batches', () => {
+    const rows = () => $('#list').querySelectorAll('.row').length;
+    it('starts with one batch, adds more on demand, and renders a far-down row when asked for it', () => {
+        reset(Array.from({ length: 500 }, (_, i) => track(`t${i}`, { idx: i })));
+        renderList();
+        expect(rows()).toBe(200);
+        showMore();
+        expect(rows()).toBe(400);
+        expect(rowEl('t450')?.dataset.id).toBe('t450');
+        expect(rows()).toBe(500);
+        showMore();
+        expect(rows()).toBe(500);
+        renderList(); // a new filter or sort starts again from the top
+        expect(rows()).toBe(200);
     });
 });

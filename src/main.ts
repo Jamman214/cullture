@@ -3,7 +3,7 @@ import { messageOf } from './api';
 import { SignedOutError, getClientId, handleRedirect, hasToken, login, setClientId, signOut } from './auth';
 import { BUILT_IN_ID, KEY, MOCK, REDIRECT } from './config';
 import { exportRatings, importRatings, openCull, refreshCull, removeTracks, reviewCull, cullIds, saveKeepers } from './cull';
-import { clickSelect, renderBulk, renderList, renderSummary, reshuffle, resumeTarget, syncSelDom, toggleSel, updateBarSpace, updateRow } from './list';
+import { clickSelect, renderBulk, renderList, renderSummary, reshuffle, resumeTarget, showMore, syncSelDom, toggleSel, updateBarSpace, updateRow } from './list';
 import {
     goNext, goPrev, loadSDK, playSong, prefsChanged, rateCurrent, ratingsChanged, renderDeck, seekBy, seekToFraction, setDragging, toggleTagCurrent, togglePlay
 } from './player';
@@ -145,6 +145,8 @@ function bindFilters(): void {
 }
 
 function bindList(): void {
+    // Add the next batch of rows before the bottom comes into view.
+    addEventListener('scroll', () => { if (innerHeight + scrollY > document.body.scrollHeight - 3000) showMore(); }, { passive: true });
     const list = $('#list');
     list.addEventListener('click', e => {
         const row = closest(e, '.row');

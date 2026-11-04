@@ -28,3 +28,6 @@ if (!storageWorks) {
 const html = readFileSync(resolve(__dirname, '../index.html'), 'utf8')
     .replace(/<script[^>]*src="\/src\/main\.ts"[^>]*><\/script>/, '');
 document.documentElement.innerHTML = html.replace(/^[\s\S]*?<html[^>]*>/i, '').replace(/<\/html>\s*$/i, '');
+
+// jsdom doesn't lay out the page, so it has no scrollIntoView.
+Element.prototype.scrollIntoView ??= () => {};

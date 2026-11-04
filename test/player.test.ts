@@ -75,10 +75,11 @@ describe('playing through the Spotify app (no browser player, as on phones)', ()
         expect(playedOn()).toBe('lap');
         expect(document.querySelector('#toast')?.textContent).toBe('Playing on Laptop');
     });
-    it('prefers a phone when none is active, and skips restricted ones', async () => {
+    it('prefers a phone when none is active, and skips restricted ones and other tabs', async () => {
         devices(
             { id: 'r', name: 'Locked', type: 'Smartphone', is_active: true, is_restricted: true },
             { id: 'tv', name: 'TV', type: 'TV', is_active: false },
+            { id: 'tab', name: 'Cullture (this browser)', type: 'Computer', is_active: true },
             { id: 'ph', name: 'iPhone', type: 'Smartphone', is_active: false });
         await playSong('a');
         await sentToSpotify();

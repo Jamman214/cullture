@@ -67,11 +67,26 @@ export function renderList(): void {
     const list = $('#list');
     if (!S.tracks.length) list.innerHTML = '<div class="empty">This list has no playable songs.</div>';
     else if (!S.view.length) list.innerHTML = '<div class="empty">No songs match these filters. <button class="btn" id="clearF">Clear filters</button></div>';
-    else list.innerHTML = S.view.map(rowHtml).join('');
+    else { list.innerHTML = ''; shown = 0; showMore(); }
     list.querySelector('#clearF')?.addEventListener('click', clearFilters);
     renderSummary();
     renderBulk();
     renderFilters();
+}
+
+/**
+ * Rows are added a batch at a time as you scroll: building thousands at once makes phones hang
+ * whenever the page re-measures (e.g. the keyboard or a dropdown opening).
+ */
+const BATCH = 200;
+let shown = 0;
+
+/** Adds the next batch of rows, or enough to include `upTo` (an index into S.view). */
+export function showMore(upTo = shown): void {
+    if (shown >= S.view.length) return;
+    const end = Math.min(S.view.length, Math.max(shown + BATCH, upTo + 1));
+    $('#list').insertAdjacentHTML('beforeend', S.view.slice(shown, end).map(rowHtml).join(''));
+    shown = end;
 }
 
 /** Re-renders one row in place, so rating a song doesn't reshuffle the list under the cursor. */
@@ -83,6 +98,8 @@ export function updateRow(id: string | null): void {
 }
 
 export function rowEl(id: string): HTMLElement | null {
+    const i = S.view.findIndex(t => t.id === id);
+    if (i >= shown) showMore(i); // it's further down than rendered so far
     return $('#list').querySelector<HTMLElement>(`.row[data-id="${id}"]`);
 }
 
