@@ -567,6 +567,11 @@ h1 {
     color: var(--bg)
 }
 
+/* Status and rating filters: one scrolling row on narrow screens, part of the wrap otherwise */
+.frow {
+    display: contents
+}
+
 .chips {
     display: inline-flex;
     gap: 4px;
@@ -1555,4 +1560,70 @@ dialog .row-actions {
 /* Excluding: the same look as the pressed 1★ chip (red tint and outline) */
 .chip-tag[data-state="exclude"] {
     --c: var(--r1)
+}
+/* Top of the workspace on narrow screens: short summary, search and sort on one row, filters scroll sideways */
+@media (max-width: 600px) {
+    .summary {
+        gap: 6px 10px;
+        align-items: center;
+        margin-bottom: 8px
+    }
+
+    .summary h1 {
+        font-size: 22px;
+        margin: 0
+    }
+
+    .summary p {
+        font-size: 13px
+    }
+
+    .sum-more,
+    .legend {
+        display: none
+    }
+
+    .bar {
+        height: 10px
+    }
+
+    .filters {
+        gap: 6px;
+        padding: 8px 0
+    }
+
+    .filters .input {
+        flex: 1 1 0;
+        min-width: 0
+    }
+
+    .frow {
+        display: flex;
+        order: 1;
+        flex: 1 0 100%;
+        gap: 6px;
+        overflow-x: auto;
+        scrollbar-width: none
+    }
+
+    .frow::-webkit-scrollbar {
+        display: none
+    }
+
+    .frow > *,
+    .chips {
+        flex: 0 0 auto;
+        flex-wrap: nowrap
+    }
+
+    .seg button,
+    .chip {
+        padding: 4px 9px;
+        white-space: nowrap
+    }
+
+    .filters select.input {
+        flex: 0 1 auto;
+        max-width: 45%
+    }
 }

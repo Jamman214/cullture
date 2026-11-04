@@ -139,8 +139,9 @@ export function renderSummary(): void {
     const rated = c[1] + c[2] + c[3] + c[4] + c[5];
     const tagged = TAGS.map(tg => [tg.label.toLowerCase(), S.tracks.filter(t => hasTag(t.id, tg.key)).length] as const)
         .filter(([, n]) => n).map(([label, n]) => `${n} ${label}`);
-    $('#sumLine').textContent = total
-        ? `${rated} of ${plural(total, 'song')} rated. ${c.heard} played but not rated, ${c.none} not played yet.${tagged.length ? ` ${tagged.join(', ')}.` : ''}`
+    // The detail after the first sentence is hidden on narrow screens.
+    $('#sumLine').innerHTML = total
+        ? `${rated} of ${plural(total, 'song')} rated.<span class="sum-more"> ${c.heard} played but not rated, ${c.none} not played yet.${tagged.length ? ` ${tagged.join(', ')}.` : ''}</span>`
         : '';
     $('#bar').innerHTML = total
         ? CATS.filter(k => c[k.k]).map(k =>

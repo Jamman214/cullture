@@ -95,12 +95,14 @@
             </div>
             <div class="filters">
                 <input type="search" class="input" id="q" placeholder="Search songs" aria-label="Search">
+                <div class="frow">
                 <div class="seg" id="status" role="group" aria-label="Played status">
                     <button data-s="all" aria-pressed="true">All</button><button data-s="unplayed"
                         aria-pressed="false">Not played</button><button data-s="played"
                         aria-pressed="false">Played</button>
                 </div>
                 <div class="chips" id="chips" role="group" aria-label="Filter by rating"></div>
+                </div>
                 <select class="input" id="sort" aria-label="Sort">
                     <option value="order">Playlist order</option>
                     <option value="added">Recently added</option>
