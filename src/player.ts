@@ -117,8 +117,14 @@ function playlistContext(): string | null {
  * Phones freeze the app in the background, so it can't stop Spotify at the end of a song. While
  * waiting for ratings, have Spotify repeat the song instead of moving on; the app pauses it on return.
  */
-async function syncRepeat(device: string): Promise<void> {
-    await api('/me/player/repeat', { method: 'PUT', query: { state: S.opts.waitForRating ? 'track' : 'off', device_id: device } }).catch(() => { /* not worth a toast */ });
+async function syncRepeat(device: string | null): Promise<void> {
+    const query = { state: S.opts.waitForRating ? 'track' : 'off', ...(device ? { device_id: device } : {}) };
+    await api('/me/player/repeat', { method: 'PUT', query }).catch(() => { /* nothing active yet; not worth a toast */ });
+}
+
+/** On opening or returning to the app (phones): make sure Spotify is repeating, if waiting for ratings. */
+export function loopIfWaiting(): void {
+    if (S.opts.waitForRating && !S.sdk) void syncRepeat(S.deviceId); // without a device yet, Spotify uses the active one
 }
 
 /** Pause, resume or seek, through the browser player or the Web API. `failMessage` reports errors. */
@@ -276,10 +282,15 @@ async function findDevice(): Promise<string | null> {
     const d = usable.find(x => x.is_active) ?? usable.find(x => x.type === 'Smartphone') ?? usable[0];
     if (!d) return null;
     S.deviceId = d.id;
-    // Spotify doesn't push state for other devices, so check on it every few seconds.
-    if (!S.pollTimer) S.pollTimer = window.setInterval(poll, 2500);
+    followSpotify();
     toast(`Playing on ${d.name}`);
     return d.id;
+}
+
+/** Spotify doesn't push state for other devices, so check on it every few seconds (and now). */
+export function followSpotify(): void {
+    if (!S.pollTimer) S.pollTimer = window.setInterval(poll, 2500);
+    void poll();
 }
 
 async function poll(): Promise<void> {
@@ -287,6 +298,8 @@ async function poll(): Promise<void> {
     try {
         // market=from_token makes Spotify say when it has swapped in another copy of a song
         const st = await api<SpotifyPlaybackState | null>('/me/player', { query: { market: 'from_token' } });
+        // Opened while Spotify was already playing: follow that device.
+        if (!S.deviceId && st?.item && st.device?.id && !st.device.is_restricted && st.device.name !== SDK_NAME) S.deviceId = st.device.id;
         const onChosenDevice = !st?.device?.id || st.device.id === S.deviceId;
         if (st?.item && onChosenDevice) {
             report({ id: st.item.id, uri: st.item.uri, linked: st.item.linked_from?.id, paused: !st.is_playing, pos: st.progress_ms ?? 0, dur: st.item.duration_ms });

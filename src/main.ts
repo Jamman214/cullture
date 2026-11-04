@@ -5,7 +5,7 @@ import { BUILT_IN_ID, KEY, MOCK, REDIRECT } from './config';
 import { exportRatings, importRatings, openCull, refreshCull, removeTracks, reviewCull, cullIds, saveKeepers } from './cull';
 import { clickSelect, renderBulk, renderList, renderSummary, reshuffle, resumeTarget, showMore, syncSelDom, toggleSel, updateBarSpace, updateRow } from './list';
 import {
-    goNext, goPrev, loadSDK, playSong, prefsChanged, rateCurrent, ratingsChanged, renderDeck, seekBy, seekToFraction, setDragging, toggleTagCurrent, togglePlay
+    followSpotify, goNext, goPrev, loadSDK, loopIfWaiting, playSong, prefsChanged, rateCurrent, ratingsChanged, renderDeck, seekBy, seekToFraction, setDragging, toggleTagCurrent, togglePlay
 } from './player';
 import { S, flushRatings, hasTag, rOf, saveOpts, setRating, setTag } from './state';
 import { nextTagFilter, TAGS, type TagKey, tagDef } from './tags';
@@ -301,8 +301,15 @@ async function init(): Promise<void> {
 
     // Test mode has no browser player, so it plays on the simulated speaker the way phones use the Spotify app.
     if (MOCK) $('#mockBadge').hidden = false;
+
     // Spotify's browser player doesn't run on phones; they play through the Spotify app instead.
-    else if (!/iPhone|iPad|iPod|Android/.test(navigator.userAgent)) void loadSDK();
+    const phone = /iPhone|iPad|iPod|Android/.test(navigator.userAgent);
+    if (!MOCK && !phone) void loadSDK();
+    if (MOCK || phone) {
+        loopIfWaiting();
+        followSpotify(); // show what Spotify is already playing
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) loopIfWaiting(); });
+    }
     $('[data-act="clientid"]').hidden = !!BUILT_IN_ID;
 
     const last = LS.get<string | null>(KEY.lastSource, null);

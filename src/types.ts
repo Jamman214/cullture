@@ -110,6 +110,6 @@ export interface SpotifyDevice { id: string | null; name: string; type: string; 
 export interface SpotifyPlaybackState {
     is_playing: boolean;
     progress_ms: number | null;
-    device?: { id: string | null };
+    device?: SpotifyDevice;
     item?: (SpotifyTrack & { id: string }) | null;
 }

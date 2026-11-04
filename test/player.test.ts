@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../src/api', async importOriginal => ({ ...(await importOriginal<typeof import('../src/api')>()), api: vi.fn(async () => null) }));
 import { SpotifyError, api } from '../src/api';
 import { computeView } from '../src/list';
-import { dispatch, playSong, rateCurrent, toggleTagCurrent } from '../src/player';
+import { dispatch, followSpotify, loopIfWaiting, playSong, rateCurrent, toggleTagCurrent } from '../src/player';
 import { S, hasTag, rOf, setRating } from '../src/state';
 import { reset, track } from './helpers';
 
@@ -70,6 +70,37 @@ describe('playing through the Spotify app (no browser player, as on phones)', ()
         await vi.waitFor(() => expect(lastBody()).toBeTruthy());
         expect(lastBody()).toEqual({ context_uri: 'spotify:playlist:pl', offset: { uri: 'spotify:track:b' }, position_ms: 0 });
         expect(S.pb.alone).toBe(true);
+    });
+    it('on opening, sets Spotify to repeat only when waiting for ratings, on the active device if none is chosen yet', () => {
+        S.deviceId = null;
+        S.opts.waitForRating = false;
+        loopIfWaiting();
+        expect(vi.mocked(api)).not.toHaveBeenCalledWith('/me/player/repeat', expect.anything());
+        S.opts.waitForRating = true;
+        loopIfWaiting();
+        expect(vi.mocked(api)).toHaveBeenCalledWith('/me/player/repeat', { method: 'PUT', query: { state: 'track' } });
+    });
+    describe('on opening while Spotify is already playing', () => {
+        const nowPlaying = (device: object) => vi.mocked(api).mockImplementation(async path => path === '/me/player'
+            ? { is_playing: true, progress_ms: 5000, device, item: { id: 'c', uri: 'spotify:track:c', duration_ms: 200_000 } }
+            : null);
+        afterEach(() => { clearInterval(S.pollTimer!); S.pollTimer = null; });
+        it('shows the song and follows that device', async () => {
+            S.deviceId = null;
+            nowPlaying({ id: 'ph', name: 'iPhone', type: 'Smartphone', is_active: true });
+            followSpotify();
+            await vi.waitFor(() => expect(S.pb).toMatchObject({ mode: 'playing', cur: 'c' }));
+            expect(S.deviceId).toBe('ph');
+        });
+        it("doesn't follow another tab's browser player", async () => {
+            S.deviceId = null;
+            nowPlaying({ id: 'tab', name: 'Cullture (this browser)', type: 'Computer', is_active: true });
+            followSpotify();
+            await vi.waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith('/me/player', expect.anything()));
+            await new Promise(r => setTimeout(r));
+            expect(S.deviceId).toBeNull();
+            expect(S.pb.cur).toBeNull();
+        });
     });
     it('plays Liked Songs from your collection', async () => {
         S.source = { ...S.source!, id: 'liked', liked: true };
