@@ -8,13 +8,13 @@
 import { api, messageOf, statusOf } from './api';
 import { getToken } from './auth';
 import { primeBeeper, setBeeping } from './beeper';
-import { MOCK_DEVICE, SDK_URL } from './config';
+import { SDK_URL } from './config';
 import { renderSummary, resumeTarget, rowEl, updateRow } from './list';
 import { type Context, type Effect, type PlaybackEvent, position, transition } from './playback';
 import { S, hasTag, markPlayed, rOf, setRating, setTag } from './state';
 import { type TagKey, tagDef, tagsHtml } from './tags';
 import { toast } from './toast';
-import type { PlayerSnapshot, SpotifyPlaybackState } from './types';
+import type { PlayerSnapshot, SpotifyDevice, SpotifyPlaybackState } from './types';
 import { $, PAUSE_PATH, PLAY_PATH, fmt, starsHtml } from './util';
 
 /* ---------- The machine ---------- */
@@ -74,18 +74,22 @@ function run(fx: Effect): void {
 }
 
 async function sendPlay(id: string, alone: boolean, positionMs: number): Promise<void> {
-    if (!S.deviceId) {
+    void S.sdk?.activateElement();
+    const device = await findDevice().catch(() => null);
+    if (!device) {
         dispatch({ type: 'failed', message: NO_PLAYER });
         return;
     }
-    void S.sdk?.activateElement();
     const ids = alone ? [id] : orderFrom(id).slice(0, 50); // Spotify plays these in order by itself
     const uris = ids.map(x => S.byId.get(x)?.uri).filter((u): u is string => !!u);
     try {
-        await api('/me/player/play', { method: 'PUT', query: { device_id: S.deviceId }, body: { uris, position_ms: Math.round(positionMs) } });
+        await api('/me/player/play', { method: 'PUT', query: { device_id: device }, body: { uris, position_ms: Math.round(positionMs) } });
     } catch (e) {
         const s = statusOf(e);
-        if (s === 404) {
+        if (s === 404 && !S.sdk) {
+            S.deviceId = null; // the Spotify app went to sleep; look for it again next time
+            dispatch({ type: 'failed', message: 'Couldn\'t reach the Spotify app. Open it, then press play again.' });
+        } else if (s === 404) {
             dispatch({ type: 'failed', message: 'The browser player has disconnected. Reload the page to reconnect it.' });
         } else {
             dispatch({ type: 'failed', message: s === 403 ? 'Spotify refused playback. Playback control needs Spotify Premium.' : 'Couldn\'t start playback: ' + messageOf(e) });
@@ -111,12 +115,11 @@ setInterval(() => {
 
 /* ---------- Actions for the rest of the app ---------- */
 
-/** Shown when there's no browser player to play through. */
-const NO_PLAYER = 'Can\'t play here. Cullture plays through Spotify\'s browser player, which needs Spotify Premium and a desktop browser.';
+/** Shown when there's neither a browser player nor a Spotify app to play through. */
+const NO_PLAYER = 'Nothing to play on. Open the Spotify app on this device (or any other), then press play again.';
 
 export async function playSong(id: string): Promise<void> {
     if (!S.byId.has(id)) return;
-    if (!S.deviceId) { toast(NO_PLAYER); return; }
     primeBeeper(); // sound is only allowed after a click, so unlock it now
     dispatch({ type: 'play', id });
 }
@@ -186,8 +189,11 @@ function report({ id, uri, linked, paused, pos, dur }: PlayerSnapshot): void {
     dispatch({ type: 'spotify', id: tid ?? null, paused, pos: pos || 0, dur: dur || 0 });
 }
 
+/** Settles once the browser player is ready (true) or has failed to start (false). */
+let sdkLoading = Promise.resolve(false);
+
 export function loadSDK(): Promise<boolean> {
-    return new Promise(resolve => {
+    return sdkLoading = new Promise(resolve => {
         let done = false;
         const finish = (v: boolean) => { if (!done) { done = true; resolve(v); } };
 
@@ -226,13 +232,24 @@ export function loadSDK(): Promise<boolean> {
     });
 }
 
-/** Test mode has no browser player: it plays on a simulated speaker, and checks on it every few seconds. */
-export function useTestSpeaker(): void {
-    S.deviceId = MOCK_DEVICE;
+/**
+ * The device to play on. Phones can't run the browser player, so without it this plays through
+ * a Spotify app instead (Spotify Connect): the active one, else a phone, else any.
+ */
+async function findDevice(): Promise<string | null> {
+    await sdkLoading;
+    if (S.deviceId) return S.deviceId;
+    const res = await api<{ devices?: SpotifyDevice[] } | null>('/me/player/devices');
+    const usable = (res?.devices ?? []).filter(d => d.id && !d.is_restricted);
+    const d = usable.find(x => x.is_active) ?? usable.find(x => x.type === 'Smartphone') ?? usable[0];
+    if (!d) return null;
+    S.deviceId = d.id;
+    // Spotify doesn't push state for other devices, so check on it every few seconds.
     if (!S.pollTimer) S.pollTimer = window.setInterval(poll, 2500);
+    toast(`Playing on ${d.name}`);
+    return d.id;
 }
 
-/** For remote devices, Spotify doesn't push state, so check it every few seconds. */
 async function poll(): Promise<void> {
     if (document.hidden) return;
     try {

@@ -105,6 +105,8 @@ export interface SpotifyPlaylist {
     snapshot_id?: string;
 }
 export interface SpotifyUser { id: string; display_name?: string }
+export interface SpotifyDevice { id: string | null; name: string; type: string; is_active: boolean; is_restricted?: boolean }
+
 export interface SpotifyPlaybackState {
     is_playing: boolean;
     progress_ms: number | null;
