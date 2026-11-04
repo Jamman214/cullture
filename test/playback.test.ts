@@ -7,6 +7,7 @@ function ctx(over: Partial<Context> = {}): Context {
     return {
         now: 100_000,
         waitForRating: false,
+        oneAtATime: false,
         isRated: () => false,
         duration: () => 200_000,
         next: id => (id === null ? 'a' : order[order.indexOf(id) + 1] ?? null),
@@ -251,5 +252,12 @@ describe('reports from Spotify', () => {
     });
     it('keeps the current song when the reported one is not in the list', () => {
         expect(transition(playing(), report(null, false, 7_000), ctx())[0]).toMatchObject({ cur: 'a', pos: 7_000 });
+    });
+});
+
+describe('playing from the playlist (phones)', () => {
+    it('gives Spotify one song at a time, so the app picks the next one', () => {
+        const [s] = transition(initialPlayback, { type: 'play', id: 'b' }, ctx({ oneAtATime: true }));
+        expect(s.alone).toBe(true);
     });
 });

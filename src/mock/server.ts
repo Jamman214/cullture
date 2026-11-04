@@ -79,7 +79,7 @@ function tick(): void {
     player.at = now;
 }
 
-interface Body { uris?: string[]; items?: { uri: string }[]; name?: string; position_ms?: number }
+interface Body { uris?: string[]; context_uri?: string; offset?: { uri: string }; items?: { uri: string }[]; name?: string; position_ms?: number }
 
 export async function mockFetch(method: string, rawUrl: string, payload?: string): Promise<Response> {
     await new Promise(r => setTimeout(r, 60 + Math.random() * 140));
@@ -148,7 +148,12 @@ export async function mockFetch(method: string, rawUrl: string, payload?: string
         tick();
         switch (route) {
             case 'PUT /me/player/play':
-                if (data.uris?.length) player = { uris: data.uris, index: 0, playing: true, pos: data.position_ms ?? 0, at: Date.now() };
+                if (data.context_uri) {
+                    const p = lib.playlists.find(x => `spotify:playlist:${x.id}` === data.context_uri);
+                    if (!p) return fail(404, 'Context not found');
+                    const uris = p.items.flatMap(e => (e.item ? [e.item.uri] : []));
+                    player = { uris, index: Math.max(0, uris.indexOf(data.offset?.uri ?? '')), playing: true, pos: data.position_ms ?? 0, at: Date.now() };
+                } else if (data.uris?.length) player = { uris: data.uris, index: 0, playing: true, pos: data.position_ms ?? 0, at: Date.now() };
                 else if (player) player.playing = true;
                 else return fail(404, 'No active device');
                 return json(204);

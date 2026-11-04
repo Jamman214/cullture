@@ -78,6 +78,8 @@ export type Effect =
 export interface Context {
     now: number;
     waitForRating: boolean;
+    /** Spotify plays from the playlist itself (phones), so the app must start each next song. */
+    oneAtATime: boolean;
     isRated(id: string): boolean;
     /** Song length in ms, or 0 if unknown. */
     duration(id: string): number;
@@ -164,9 +166,12 @@ export function transition(s: Playback, e: PlaybackEvent, c: Context): Result {
     }
 }
 
-/** Starts a song. With "wait for a rating" on, Spotify gets it alone so it can't move on by itself. */
+/**
+ * Starts a song. With "wait for a rating" on, Spotify gets it alone so it can't move on by itself;
+ * when playing from the playlist (phones) the app picks the next song itself too.
+ */
 function start(id: string, at: number, c: Context): Result {
-    const alone = c.waitForRating;
+    const alone = c.waitForRating || c.oneAtATime;
     return [
         { mode: 'playing', cur: id, pos: at, at: c.now, dur: c.duration(id), alone, expect: { id, until: c.now + EXPECT_MS } },
         [{ kind: 'play', id, alone, position: at }, { kind: 'played', id }]

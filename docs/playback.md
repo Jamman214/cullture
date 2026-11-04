@@ -51,7 +51,7 @@ Everything else in the app calls actions that send events: `playSong`, `togglePl
 | How it plays | Web Playback SDK creates a device called "Cullture (this browser)" | Web API Spotify Connect commands |
 | Play, pause, seek | SDK methods | `PUT /me/player/...` requests |
 | Learning what's playing | SDK pushes `player_state_changed` events | Polls `GET /me/player` every 2.5 s, skipped while the tab is hidden |
-| Needs | Premium, a desktop browser | Premium, Spotify open on that device |
+| Needs | Premium, a desktop browser | Premium, Spotify awake on that device (on phones: playing, or iOS puts it to sleep) |
 
 Both routes turn Spotify's reports into the same `spotify` event, after matching the song to the open list: first by the song Spotify was asked for, when it has swapped in a regional copy, then by ID, then by URI (see relinking in [spotify-integration.md](spotify-integration.md)).
 

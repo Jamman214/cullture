@@ -21,7 +21,8 @@ beforeEach(() => {
 });
 afterEach(() => { vi.useRealTimers(); });
 
-describe('what gets sent to Spotify', () => {
+describe('what gets sent to the browser player', () => {
+    beforeEach(() => { S.sdk = { activateElement: async () => {} } as unknown as Spotify.Player; });
     it('the chosen song and the rest of the list after it', async () => {
         await playSong('b');
         expect(await sentToSpotify()).toEqual(['b', 'c', 'd', 'e']);
@@ -55,13 +56,28 @@ describe('what gets sent to Spotify', () => {
     it('explains, and sends nothing, when there is nothing to play on', async () => {
         S.deviceId = null;
         await playSong('a');
-        await vi.waitFor(() => expect(document.querySelector('#toast')?.textContent).toMatch(/Open the Spotify app/));
+        await vi.waitFor(() => expect(document.querySelector('#toast')?.textContent).toMatch(/Couldn.t reach the Spotify app/));
         expect(vi.mocked(api)).not.toHaveBeenCalledWith('/me/player/play', expect.anything());
         expect(S.pb.mode).toBe('idle');
     });
 });
 
 describe('playing through the Spotify app (no browser player, as on phones)', () => {
+    const lastBody = () => vi.mocked(api).mock.calls.filter(c => c[0] === '/me/player/play').at(-1)?.[1]?.body;
+    it('plays from the playlist at the chosen song, and picks each next song itself', async () => {
+        S.deviceId = 'ph';
+        await playSong('b');
+        await vi.waitFor(() => expect(lastBody()).toBeTruthy());
+        expect(lastBody()).toEqual({ context_uri: 'spotify:playlist:pl', offset: { uri: 'spotify:track:b' }, position_ms: 0 });
+        expect(S.pb.alone).toBe(true);
+    });
+    it('sends the songs directly for Liked Songs, which has no playlist to play from', async () => {
+        S.source = { ...S.source!, id: 'liked', liked: true };
+        S.deviceId = 'ph';
+        S.opts.waitForRating = false;
+        await playSong('b');
+        expect(await sentToSpotify()).toEqual(['b', 'c', 'd', 'e']);
+    });
     const devices = (...list: object[]) => vi.mocked(api).mockImplementation(async path =>
         path === '/me/player/devices' ? { devices: list } : null);
     const playedOn = () => vi.mocked(api).mock.calls.find(c => c[0] === '/me/player/play')?.[1]?.query?.device_id;
@@ -71,7 +87,7 @@ describe('playing through the Spotify app (no browser player, as on phones)', ()
     it('uses the active device', async () => {
         devices({ id: 'tv', name: 'TV', type: 'TV', is_active: false }, { id: 'lap', name: 'Laptop', type: 'Computer', is_active: true });
         await playSong('a');
-        await sentToSpotify();
+        await vi.waitFor(() => expect(playedOn()).toBeTruthy());
         expect(playedOn()).toBe('lap');
         expect(document.querySelector('#toast')?.textContent).toBe('Playing on Laptop');
     });
@@ -82,19 +98,19 @@ describe('playing through the Spotify app (no browser player, as on phones)', ()
             { id: 'tab', name: 'Cullture (this browser)', type: 'Computer', is_active: true },
             { id: 'ph', name: 'iPhone', type: 'Smartphone', is_active: false });
         await playSong('a');
-        await sentToSpotify();
+        await vi.waitFor(() => expect(playedOn()).toBeTruthy());
         expect(playedOn()).toBe('ph');
         expect(S.deviceId).toBe('ph');
     });
-    it('forgets the device when Spotify says it is gone, and looks again next time', async () => {
+    it.each([404, 502])('forgets the device when Spotify answers %i (app asleep), and looks again next time', async status => {
         S.deviceId = 'ph';
         vi.mocked(api).mockImplementation(async path => {
-            if (path === '/me/player/play') throw new SpotifyError('Device not found', 404);
+            if (path === '/me/player/play') throw new SpotifyError('Device not found', status);
             return null;
         });
         await playSong('a');
-        await vi.waitFor(() => expect(document.querySelector('#toast')?.textContent).toMatch(/Couldn.t reach the Spotify app/));
-        expect(S.deviceId).toBeNull();
+        await vi.waitFor(() => expect(S.deviceId).toBeNull());
+        expect(document.querySelector('#toast')?.textContent).toMatch(/Couldn.t reach the Spotify app/);
     });
 });
 

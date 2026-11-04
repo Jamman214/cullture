@@ -34,6 +34,7 @@ function orderFrom(id: string): string[] {
 const context = (): Context => ({
     now: Date.now(),
     waitForRating: S.opts.waitForRating,
+    oneAtATime: !!playlistContext(),
     isRated: id => !!rOf(id),
     duration: id => S.byId.get(id)?.dur ?? 0,
     next: id => (id ? orderFrom(id)[1] : resumeTarget()?.id) ?? null,
@@ -82,13 +83,17 @@ async function sendPlay(id: string, alone: boolean, positionMs: number): Promise
     }
     const ids = alone ? [id] : orderFrom(id).slice(0, 50); // Spotify plays these in order by itself
     const uris = ids.map(x => S.byId.get(x)?.uri).filter((u): u is string => !!u);
+    const ctx = playlistContext();
+    // iPhones stop and stay silent when sent a bare list of songs, but play from a playlist fine.
+    const body = ctx ? { context_uri: ctx, offset: { uri: uris[0] } } : { uris };
     try {
-        await api('/me/player/play', { method: 'PUT', query: { device_id: device }, body: { uris, position_ms: Math.round(positionMs) } });
+        await api('/me/player/play', { method: 'PUT', query: { device_id: device }, body: { ...body, position_ms: Math.round(positionMs) } });
     } catch (e) {
         const s = statusOf(e);
-        if (s === 404 && !S.sdk) {
-            S.deviceId = null; // the Spotify app went to sleep; look for it again next time
-            dispatch({ type: 'failed', message: 'Couldn\'t reach the Spotify app. Open it, then press play again.' });
+        // 404 or 5xx (e.g. Bad gateway): the Spotify app went to sleep; look for it again next time
+        if (!S.sdk && (s === 404 || (s ?? 0) >= 500)) {
+            S.deviceId = null;
+            dispatch({ type: 'failed', message: NO_PLAYER });
         } else if (s === 404) {
             dispatch({ type: 'failed', message: 'The browser player has disconnected. Reload the page to reconnect it.' });
         } else {
@@ -96,6 +101,13 @@ async function sendPlay(id: string, alone: boolean, positionMs: number): Promise
         }
     }
 }
+
+/**
+ * The playlist to play from when playing through the Spotify app, or null to send songs directly
+ * (the browser player, and Liked Songs, which has no playlist to point at).
+ */
+const playlistContext = (): string | null =>
+    !S.sdk && S.source && !S.source.liked ? `spotify:playlist:${S.source.id}` : null;
 
 /** Pause, resume or seek, through the browser player or the Web API. `failMessage` reports errors. */
 async function control(viaSdk: () => Promise<void>, path: string, query: Record<string, number> = {}, failMessage?: string): Promise<void> {
@@ -115,8 +127,8 @@ setInterval(() => {
 
 /* ---------- Actions for the rest of the app ---------- */
 
-/** Shown when there's neither a browser player nor a Spotify app to play through. */
-const NO_PLAYER = 'Nothing to play on. Open the Spotify app on this device (or any other), then press play again.';
+/** Shown when there's neither a browser player nor an awake Spotify app to play through. */
+const NO_PLAYER = 'Couldn\'t reach the Spotify app. Phones put it to sleep unless it\'s playing, so start any song in it, then come back and press play.';
 
 export async function playSong(id: string): Promise<void> {
     if (!S.byId.has(id)) return;
