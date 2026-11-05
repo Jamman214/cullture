@@ -1640,3 +1640,12 @@ dialog .row-actions {
         content-visibility: visible
     }
 }
+
+/* Dragging on the bars shouldn't scroll the list behind them. The chip row and the ⋯ menu
+   scroll themselves, so they still pan inside. */
+.top,
+.filters,
+.bulk,
+.deck {
+    touch-action: none
+}
