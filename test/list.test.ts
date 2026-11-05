@@ -171,11 +171,13 @@ describe('rendering a long list in batches', () => {
         expect(rows()).toBe(200);
         showMore();
         expect(rows()).toBe(400);
-        expect(rowEl('t450')?.dataset.id).toBe('t450');
+        expect(rowEl('t450')?.dataset.id).toBe('t450'); // within one batch of the end: rendered
         expect(rows()).toBe(500);
         showMore();
         expect(rows()).toBe(500);
         renderList(); // a new filter or sort starts again from the top
+        expect(rows()).toBe(200);
+        expect(rowEl('t450')).toBeNull(); // far down: not worth rendering hundreds of rows for
         expect(rows()).toBe(200);
     });
 });

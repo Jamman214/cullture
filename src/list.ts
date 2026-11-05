@@ -98,8 +98,9 @@ export function updateRow(id: string | null): void {
 }
 
 export function rowEl(id: string): HTMLElement | null {
+    // Render up to it if that's at most one more batch (playing on down the list); not thousands of rows.
     const i = S.view.findIndex(t => t.id === id);
-    if (i >= shown) showMore(i); // it's further down than rendered so far
+    if (i >= shown && i < shown + BATCH) showMore(i);
     return $('#list').querySelector<HTMLElement>(`.row[data-id="${id}"]`);
 }
 
