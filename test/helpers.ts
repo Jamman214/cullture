@@ -23,6 +23,7 @@ export function reset(tracks: Track[] = []): void {
     S.queue = null;
     S.pb = initialPlayback;
     S.deviceId = 'test-device';
+    S.spotifyQueued = null;
     S.sdk = null;
     S.source = { ...playlist, total: tracks.length };
     setTracks(tracks);

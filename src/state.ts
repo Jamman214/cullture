@@ -24,6 +24,8 @@ export interface AppState {
     sdk: Spotify.Player | null;
     deviceId: string | null;
     pollTimer: number | null;
+    /** A song Cullture added to Spotify's queue that hasn't played yet (see followQueue in player.ts). */
+    spotifyQueued: string | null;
 }
 
 export const S: AppState = {
@@ -33,7 +35,7 @@ export const S: AppState = {
     ratings: LS.get<Ratings>(KEY.ratings, {}),
     opts: { skipRated: true, autoAdvance: true, waitForRating: false, ...LS.get<Partial<Opts>>(KEY.opts, {}) },
     pb: initialPlayback,
-    sdk: null, deviceId: null, pollTimer: null
+    sdk: null, deviceId: null, pollTimer: null, spotifyQueued: null
 };
 
 const storageError = () => toast('Could not save to browser storage. Export your ratings as a backup.');

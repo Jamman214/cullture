@@ -35,6 +35,8 @@ const bump = (p: MockPlaylist) => { revs.set(p.id, (revs.get(p.id) ?? 0) + 1); r
 
 /** Simulated playback: a queue of URIs, the current index, and position at time `at`. */
 let repeatTrack = false;
+/** Songs added with the queue endpoint and not reached yet; kept when another song is started, like Spotify's. */
+let upNext: string[] = [];
 let player: { uris: string[]; index: number; playing: boolean; pos: number; at: number } | null = null;
 
 const json = (status: number, body?: unknown, headers: Record<string, string> = {}) =>
@@ -75,6 +77,7 @@ function tick(): void {
             if (player.index >= player.uris.length - 1) { pos = 0; player.playing = false; break; }
             pos -= d;
             player.index++;
+            if (upNext[0] === player.uris[player.index]) upNext.shift();
         }
         player.pos = pos;
     }
@@ -157,8 +160,21 @@ export async function mockFetch(method: string, rawUrl: string, payload?: string
                     const uris = p ? p.items.flatMap(e => (e.item ? [e.item.uri] : [])) : lib.liked.map(l => l.track.uri);
                     player = { uris, index: Math.max(0, uris.indexOf(data.offset?.uri ?? '')), playing: true, pos: data.position_ms ?? 0, at: Date.now() };
                 } else if (data.uris?.length) player = { uris: data.uris, index: 0, playing: true, pos: data.position_ms ?? 0, at: Date.now() };
+                if (player && (data.context_uri || data.uris?.length)) player.uris.splice(player.index + 1, 0, ...upNext);
                 else if (player) player.playing = true;
                 else return fail(404, 'No active device');
+                return json(204);
+            case 'POST /me/player/queue': {
+                if (!player) return fail(404, 'No active device');
+                const u = url.searchParams.get('uri') ?? '';
+                player.uris.splice(player.index + upNext.length + 1, 0, u);
+                upNext.push(u);
+                return json(204);
+            }
+            case 'POST /me/player/next':
+                if (!player || player.index >= player.uris.length - 1) return fail(404, 'Nothing next');
+                Object.assign(player, { index: player.index + 1, pos: 0, playing: true });
+                if (upNext[0] === player.uris[player.index]) upNext.shift();
                 return json(204);
             case 'PUT /me/player/repeat':
                 repeatTrack = url.searchParams.get('state') === 'track';

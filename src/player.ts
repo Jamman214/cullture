@@ -10,7 +10,7 @@ import { getToken } from './auth';
 import { primeBeeper, setBeeping } from './beeper';
 import { SDK_URL } from './config';
 import { renderSummary, resumeTarget, rowEl, updateRow } from './list';
-import { type Context, type Effect, type PlaybackEvent, position, transition } from './playback';
+import { type Context, type Effect, type Playback, type PlaybackEvent, position, transition } from './playback';
 import { S, hasTag, markPlayed, rOf, setRating, setTag } from './state';
 import { type TagKey, tagDef, tagsHtml } from './tags';
 import { toast } from './toast';
@@ -34,7 +34,6 @@ function orderFrom(id: string): string[] {
 const context = (): Context => ({
     now: Date.now(),
     waitForRating: S.opts.waitForRating,
-    oneAtATime: !!playlistContext(),
     isRated: id => !!rOf(id),
     duration: id => S.byId.get(id)?.dur ?? 0,
     next: id => (id ? orderFrom(id)[1] : resumeTarget()?.id) ?? null,
@@ -46,12 +45,47 @@ const context = (): Context => ({
     }
 });
 
+/**
+ * Through the Spotify app, Spotify plays the playlist in its own order when a song ends. So once a
+ * song is playing, Cullture adds the next one in its order to Spotify's queue, one at a time:
+ * Spotify's queue can't be cleared, so after a jump a queued song is left over and plays next.
+ */
+/** Queuing failed for this song; don't keep retrying. */
+let noQueueFor: string | null = null;
+
+function followQueue(before: Playback, after: Playback): void {
+    // Spotify moved on by itself (when Cullture starts a song, it waits for Spotify: `expect`).
+    if (after.cur !== before.cur && after.cur && !after.expect) {
+        // Whatever was queued has played, or isn't coming; queue afresh after this song.
+        S.spotifyQueued = null;
+        // Right as the last song ended, Spotify chose a song (a leftover from before a jump, or its
+        // own pick): go to the one that should follow. Not mid-song (you picked it in Spotify), and not
+        // long after the end (found on coming back from the background: it's moved on several songs).
+        const endAt = before.at + before.dur - before.pos;
+        const atEnd = before.mode === 'playing' && Math.abs(Date.now() - endAt) < 6000;
+        const want = before.cur && context().next(before.cur);
+        if (atEnd && want && want !== after.cur) { dispatch({ type: 'play', id: want }); return; }
+    }
+    if (S.spotifyQueued || S.opts.waitForRating || after.mode !== 'playing' || after.expect || !after.cur || noQueueFor === after.cur) return;
+    const next = context().next(after.cur);
+    const uri = next && S.byId.get(next)?.uri;
+    if (!next || !uri) return;
+    S.spotifyQueued = next;
+    const cur = after.cur;
+    api('/me/player/queue', { method: 'POST', query: { uri, device_id: S.deviceId ?? '' } })
+        .catch(() => { S.spotifyQueued = null; noQueueFor = cur; });
+}
+
 /** The one place playback state changes. */
 export function dispatch(event: PlaybackEvent): void {
     const before = S.pb;
     const [after, effects] = transition(before, event, context());
     S.pb = after;
     for (const fx of effects) run(fx);
+    // Spotify has started the song we asked for. Setting repeat again: starting a song can reset it,
+    // and Spotify doesn't promise to handle the two requests in the order they were sent.
+    if (before.expect && !after.expect && after.cur === before.expect.id && playlistContext() && S.deviceId) void syncRepeat(S.deviceId);
+    if (playlistContext()) followQueue(before, after);
     if (after !== before) {
         if (after.cur !== before.cur) {
             updateRow(before.cur);
@@ -86,8 +120,12 @@ async function sendPlay(id: string, alone: boolean, positionMs: number): Promise
     const ctx = playlistContext();
     // iPhones stop and stay silent when sent a bare list of songs, but play from a playlist fine.
     const body = ctx ? { context_uri: ctx, offset: { uri: uris[0] } } : { uris };
+    // The song Cullture queued is next in Spotify's queue: skip to it, so it isn't left there to play again.
+    const skip = !!ctx && id === S.spotifyQueued && !positionMs;
+    if (skip) S.spotifyQueued = null;
     try {
-        await api('/me/player/play', { method: 'PUT', query: { device_id: device }, body: { ...body, position_ms: Math.round(positionMs) } });
+        if (skip) await api('/me/player/next', { method: 'POST', query: { device_id: device } });
+        else await api('/me/player/play', { method: 'PUT', query: { device_id: device }, body: { ...body, position_ms: Math.round(positionMs) } });
         if (ctx) await syncRepeat(device);
     } catch (e) {
         const s = statusOf(e);

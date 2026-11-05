@@ -64,12 +64,56 @@ describe('what gets sent to the browser player', () => {
 
 describe('playing through the Spotify app (no browser player, as on phones)', () => {
     const lastBody = () => vi.mocked(api).mock.calls.filter(c => c[0] === '/me/player/play').at(-1)?.[1]?.body;
-    it('plays from the playlist at the chosen song, and picks each next song itself', async () => {
+    it('plays from the playlist at the chosen song', async () => {
         S.deviceId = 'ph';
         await playSong('b');
         await vi.waitFor(() => expect(lastBody()).toBeTruthy());
         expect(lastBody()).toEqual({ context_uri: 'spotify:playlist:pl', offset: { uri: 'spotify:track:b' }, position_ms: 0 });
-        expect(S.pb.alone).toBe(true);
+    });
+    describe("queuing the next song in Spotify's queue", () => {
+        const queuedUris = () => vi.mocked(api).mock.calls.filter(c => c[0] === '/me/player/queue').map(c => c[1]?.query?.uri);
+        const started = (id: string) => dispatch({ type: 'spotify', id, paused: false, pos: 0, dur: 200_000 });
+        it('queues the next song once Spotify has started this one, and only once', async () => {
+            S.deviceId = 'ph';
+            await playSong('b');
+            expect(queuedUris()).toEqual([]); // not before Spotify confirms
+            started('b');
+            started('b');
+            expect(queuedUris()).toEqual(['spotify:track:c']);
+        });
+        it('queues nothing while waiting for ratings (Spotify repeats the song instead)', async () => {
+            S.deviceId = 'ph';
+            S.opts.waitForRating = true;
+            await playSong('b');
+            started('b');
+            expect(queuedUris()).toEqual([]);
+        });
+        it('skips to the queued song for Next, instead of starting it again and leaving it queued', async () => {
+            S.deviceId = 'ph';
+            await playSong('b');
+            started('b');
+            dispatch({ type: 'next' });
+            await vi.waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith('/me/player/next', expect.anything()));
+            expect(vi.mocked(api).mock.calls.filter(c => c[0] === '/me/player/play')).toHaveLength(1);
+        });
+        it('when a song ends and Spotify picks another (a leftover after a jump), goes to the one that should follow', async () => {
+            S.deviceId = 'ph';
+            S.spotifyQueued = 'c'; // queued before jumping to a
+            dispatch({ type: 'spotify', id: 'a', paused: false, pos: 199_000, dur: 200_000 }); // a is about to end
+            vi.mocked(api).mockClear();
+            started('c'); // Spotify plays the leftover when a ends
+            await vi.waitFor(() => expect(lastBody()).toMatchObject({ offset: { uri: 'spotify:track:b' } }));
+        });
+        it('goes along with a song picked in Spotify mid-song, and queues what follows it', async () => {
+            S.deviceId = 'ph';
+            S.spotifyQueued = 'c';
+            dispatch({ type: 'spotify', id: 'a', paused: false, pos: 50_000, dur: 200_000 });
+            vi.mocked(api).mockClear();
+            started('d');
+            expect(S.pb.cur).toBe('d');
+            expect(lastBody()).toBeUndefined();
+            expect(queuedUris()).toEqual(['spotify:track:e']);
+        });
     });
     it('on opening, sets Spotify to repeat only when waiting for ratings, on the active device if none is chosen yet', () => {
         S.deviceId = null;
@@ -110,6 +154,15 @@ describe('playing through the Spotify app (no browser player, as on phones)', ()
             expect(S.deviceId).toBeNull();
             expect(S.pb.cur).toBeNull();
         });
+    });
+    it('sets repeat again once Spotify reports the new song started, in case starting it reset repeat', async () => {
+        S.deviceId = 'ph';
+        S.opts.waitForRating = true;
+        await playSong('b');
+        const repeats = () => vi.mocked(api).mock.calls.filter(c => c[0] === '/me/player/repeat').length;
+        await vi.waitFor(() => expect(repeats()).toBe(1));
+        dispatch({ type: 'spotify', id: 'b', paused: false, pos: 0, dur: 200_000 });
+        await vi.waitFor(() => expect(repeats()).toBe(2));
     });
     it('plays Liked Songs from your collection', async () => {
         S.source = { ...S.source!, id: 'liked', liked: true };

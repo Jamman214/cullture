@@ -70,7 +70,7 @@ Starting a song gives Spotify the next 50 songs to follow, so it keeps going by 
 
 With **Wait for a rating** on, Spotify is given only the one song, so it can't move on before you rate it.
 
-Through the Spotify app, the app instead asks Spotify to play the playlist (or Liked Songs) from the chosen song, since iPhones go silent when sent a bare list of songs. Spotify would then carry on in playlist order, so the app starts each next song itself. Phones freeze the app in the background, so with **Wait for a rating** on Spotify is set to repeat the song; on return the app notices the song is over by its clock, pauses and waits.
+Through the Spotify app, the app instead asks Spotify to play the playlist (or Liked Songs) from the chosen song, since iPhones go silent when sent a bare list of songs. Spotify would then carry on in playlist order, so once a song is playing the app adds the next song in its own order to Spotify's queue, one at a time (Spotify's queue can't be cleared, so after a jump one queued song is left over). Next and moving on after a rating skip to the queued song. If, right as a song ends, Spotify plays something other than what should follow (a leftover, or its own pick), the app switches to the right song; a song picked in Spotify mid-song is left alone. Phones freeze the app in the background, so with **Wait for a rating** on Spotify is set to repeat the song; on return the app notices the song is over by its clock, pauses and waits.
 
 ## Spotting the end of a song
 
