@@ -293,6 +293,18 @@ export function followSpotify(): void {
     void poll();
 }
 
+// shortcut: temporary diagnostic for "current song not shown on open"; remove once fixed.
+let diagnosed = false;
+function diagnose(st: SpotifyPlaybackState | null): void {
+    if (diagnosed || !S.tracks.length) return;
+    diagnosed = true;
+    const it = st?.item;
+    const inList = !!it && (S.byId.has(it.id) || (!!it.linked_from?.id && S.byId.has(it.linked_from.id)) || S.tracks.some(t => t.uri === it.uri));
+    toast(!st ? 'Debug: Spotify reported nothing (no active device).'
+        : `Debug: ${st.is_playing ? 'playing' : 'paused'} “${it?.name ?? 'no song'}” on ${st.device?.name ?? '?'} (${st.device?.type ?? '?'}${st.device?.is_restricted ? ', restricted' : ''}). In list: ${inList ? 'yes' : 'no'}. Device chosen: ${S.deviceId ? (S.deviceId === st.device?.id ? 'this one' : 'another') : 'none'}.`,
+        { ms: 15000 });
+}
+
 async function poll(): Promise<void> {
     if (document.hidden) return;
     try {
@@ -300,6 +312,7 @@ async function poll(): Promise<void> {
         const st = await api<SpotifyPlaybackState | null>('/me/player', { query: { market: 'from_token' } });
         // Opened while Spotify was already playing: follow that device.
         if (!S.deviceId && st?.item && st.device?.id && !st.device.is_restricted && st.device.name !== SDK_NAME) S.deviceId = st.device.id;
+        diagnose(st);
         const onChosenDevice = !st?.device?.id || st.device.id === S.deviceId;
         if (st?.item && onChosenDevice) {
             report({ id: st.item.id, uri: st.item.uri, linked: st.item.linked_from?.id, paused: !st.is_playing, pos: st.progress_ms ?? 0, dur: st.item.duration_ms });

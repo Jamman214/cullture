@@ -4,6 +4,8 @@ interface ToastOpts {
     undo?: () => void;
     link?: string;
     linkText?: string;
+    /** How long to show it, in ms. */
+    ms?: number;
 }
 
 let timer: number | undefined;
@@ -26,5 +28,5 @@ export function toast(msg: string, opts: ToastOpts = {}): void {
     }
     el.hidden = false;
     clearTimeout(timer);
-    timer = window.setTimeout(() => { el.hidden = true; }, opts.undo || opts.link ? 8000 : 4500);
+    timer = window.setTimeout(() => { el.hidden = true; }, opts.ms ?? (opts.undo || opts.link ? 8000 : 4500));
 }
