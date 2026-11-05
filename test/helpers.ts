@@ -17,7 +17,7 @@ export function reset(tracks: Track[] = []): void {
     localStorage.clear();
     S.ratings = {};
     S.opts = { skipRated: true, autoAdvance: true, waitForRating: false };
-    S.filter = { q: '', status: 'all', ratings: new Set(), sort: 'order', tags: new Map() };
+    S.filter = { q: '', status: 'all', ratings: new Set(), sort: 'order', rev: false, tags: new Map() };
     S.sel = new Set();
     S.anchor = null;
     S.queue = null;

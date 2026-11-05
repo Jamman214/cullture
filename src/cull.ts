@@ -67,7 +67,8 @@ export function reviewCull(): void {
     S.filter.ratings = new Set(Array.from({ length: max }, (_, i) => String(i + 1)));
     S.filter.status = 'all';
     S.filter.q = '';
-    S.filter.sort = 'rasc';
+    S.filter.sort = 'rating';
+    S.filter.rev = true;
     $<HTMLInputElement>('#q').value = '';
     S.sel = new Set(cullIds());
     $<HTMLDialogElement>('#cullDlg').close();

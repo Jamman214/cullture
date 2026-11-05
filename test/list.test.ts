@@ -64,8 +64,21 @@ describe('sorting', () => {
     });
     it('sorts by rating either way, with unrated songs last', () => {
         setRating(['a'], 2); setRating(['c'], 5);
-        expect(sorted('rdesc')).toEqual(['c', 'a', 'b', 'd']);
-        expect(sorted('rasc')).toEqual(['a', 'c', 'b', 'd']);
+        expect(sorted('rating')).toEqual(['c', 'a', 'b', 'd']);
+        S.filter.rev = true;
+        expect(sorted('rating')).toEqual(['a', 'c', 'b', 'd']);
+    });
+    it('sorts by most recently rated, with unrated songs last', () => {
+        setRating(['c'], 5); S.ratings.c.t = 1; setRating(['a'], 2); S.ratings.a.t = 2;
+        expect(sorted('rated')).toEqual(['a', 'c', 'b', 'd']);
+        S.filter.rev = true;
+        expect(sorted('rated')).toEqual(['c', 'a', 'b', 'd']);
+    });
+    it('reverses any sort but Random order', () => {
+        S.filter.rev = true;
+        expect(sorted('title')).toEqual(['a', 'c', 'd', 'b']);
+        reshuffle(); const r = sorted('shuffle'); S.filter.rev = false;
+        expect(sorted('shuffle')).toEqual(r);
     });
     it('keeps a random order steady until shuffled again', () => {
         const values = (list: number[]) => { let n = 0; vi.spyOn(Math, 'random').mockImplementation(() => list[n++ % list.length]); };

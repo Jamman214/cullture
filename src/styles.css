@@ -1649,3 +1649,6 @@ dialog .row-actions {
 .deck {
     touch-action: none
 }
+
+#reverse svg { transition: transform .15s }
+#reverse[aria-pressed="true"] svg { transform: rotate(180deg) }

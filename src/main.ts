@@ -128,6 +128,7 @@ function bindFilters(): void {
     };
     // Clicking a segment of the progress bar filters to that group.
     $('#reshuffle').onclick = () => { reshuffle(); renderList(); };
+    $('#reverse').onclick = () => { S.filter.rev = !S.filter.rev; renderList(); };
     $('#bar').onclick = e => {
         const k = closest(e, 'button')?.dataset.k;
         if (!k) return;

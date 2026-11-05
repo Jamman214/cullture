@@ -38,12 +38,15 @@ export function computeView(): void {
         added: (a, b) => (b.added || '').localeCompare(a.added || ''),
         title: (a, b) => a.name.localeCompare(b.name),
         artist: (a, b) => a.artists.localeCompare(b.artists) || a.name.localeCompare(b.name),
-        rdesc: (a, b) => (rOf(b.id) || -1) - (rOf(a.id) || -1) || a.idx - b.idx,
-        rasc: (a, b) => (rOf(a.id) || 9) - (rOf(b.id) || 9) || a.idx - b.idx,
+        rating: (a, b) => rOf(b.id) - rOf(a.id),
+        rated: (a, b) => (S.ratings[b.id]?.t ?? 0) - (S.ratings[a.id]?.t ?? 0),
         dur: (a, b) => b.dur - a.dur,
         shuffle: (a, b) => shuffleKey(a.id) - shuffleKey(b.id)
     };
-    S.view = v.sort(cmp[sort]);
+    const dir = S.filter.rev && sort !== 'shuffle' ? -1 : 1;
+    // Unrated songs stay at the end whichever way a rating sort goes.
+    const unratedLast = (a: Track, b: Track) => sort === 'rating' || sort === 'rated' ? +!rOf(a.id) - +!rOf(b.id) : 0;
+    S.view = v.sort((a, b) => unratedLast(a, b) || dir * cmp[sort](a, b) || a.idx - b.idx);
 }
 
 export function rowHtml(t: Track): string {
@@ -191,6 +194,8 @@ export function renderFilters(): void {
         }).join('');
     $<HTMLSelectElement>('#sort').value = S.filter.sort;
     $('#reshuffle').hidden = S.filter.sort !== 'shuffle';
+    $('#reverse').hidden = S.filter.sort === 'shuffle';
+    $('#reverse').setAttribute('aria-pressed', String(S.filter.rev));
     updateMaster();
 }
 

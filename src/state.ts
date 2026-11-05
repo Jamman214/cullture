@@ -31,7 +31,7 @@ export interface AppState {
 export const S: AppState = {
     me: null, sources: [], source: null, tracks: [], byId: new Map(), view: [],
     sel: new Set(), anchor: null, queue: null,
-    filter: { q: '', status: 'all', ratings: new Set(), sort: 'order', tags: new Map() },
+    filter: { q: '', status: 'all', ratings: new Set(), sort: 'order', rev: false, tags: new Map() },
     ratings: LS.get<Ratings>(KEY.ratings, {}),
     opts: { skipRated: true, autoAdvance: true, waitForRating: false, ...LS.get<Partial<Opts>>(KEY.opts, {}) },
     pb: initialPlayback,

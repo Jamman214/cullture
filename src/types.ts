@@ -40,7 +40,7 @@ export interface RatingEntry {
 export type Ratings = Record<string, RatingEntry>;
 
 export type StatusFilter = 'all' | 'unplayed' | 'played';
-export type SortKey = 'order' | 'added' | 'title' | 'artist' | 'rdesc' | 'rasc' | 'dur' | 'shuffle';
+export type SortKey = 'order' | 'added' | 'title' | 'artist' | 'rating' | 'rated' | 'dur' | 'shuffle';
 
 export interface Filter {
     q: string;
@@ -48,6 +48,8 @@ export interface Filter {
     /** '1'–'5' or 'none' for unrated. */
     ratings: Set<string>;
     sort: SortKey;
+    /** Reverse the sort (not used by Random order). */
+    rev: boolean;
     /** Tag chips that are switched on, and whether each hides or shows only its songs. */
     tags: Map<TagKey, TagFilter>;
 }
