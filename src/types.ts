@@ -63,6 +63,9 @@ export interface PlayerSnapshot {
     id?: string | null;
     uri?: string;
     linked?: string | null;
+    /** Title and artists ("A, B"), for matching another copy of the same song. */
+    name?: string;
+    artists?: string;
     paused: boolean;
     pos: number;
     dur: number;

@@ -213,13 +213,15 @@ export function ratingsChanged(ids: string[]): void {
 /* ---------- Spotify ---------- */
 
 /** Turns a Spotify report into an event, matching the song to the open list. */
-function report({ id, uri, linked, paused, pos, dur }: PlayerSnapshot): void {
+function report({ id, uri, linked, name, artists, paused, pos, dur }: PlayerSnapshot): void {
     // When a song isn't available in your country, Spotify plays another copy of it (often from a
     // different album) and says which song it was asked for in `linked`. Check that first: the copy
     // may also be in the list, and matching it would jump to its place in the playlist.
     const tid = linked && S.byId.has(linked) ? linked
         : id && S.byId.has(id) ? id
-            : [...S.byId.values()].find(t => t.uri === uri)?.id;
+            : [...S.byId.values()].find(t => t.uri === uri)?.id
+                // Another copy of the same song (a single vs the album version), e.g. started in the Spotify app.
+                ?? (name ? S.tracks.find(t => t.name === name && t.artists === artists)?.id : undefined);
     dispatch({ type: 'spotify', id: tid ?? null, paused, pos: pos || 0, dur: dur || 0 });
 }
 
@@ -256,7 +258,7 @@ export function loadSDK(): Promise<boolean> {
             p.addListener('player_state_changed', st => {
                 if (!st) return;
                 const ct = st.track_window?.current_track;
-                report({ id: ct?.id, uri: ct?.uri, linked: ct?.linked_from?.id, paused: st.paused, pos: st.position, dur: st.duration });
+                report({ id: ct?.id, uri: ct?.uri, linked: ct?.linked_from?.id, name: ct?.name, artists: ct?.artists.map(a => a.name).join(', '), paused: st.paused, pos: st.position, dur: st.duration });
             });
             p.connect();
         };
@@ -293,18 +295,6 @@ export function followSpotify(): void {
     void poll();
 }
 
-// shortcut: temporary diagnostic for "current song not shown on open"; remove once fixed.
-let diagnosed = false;
-function diagnose(st: SpotifyPlaybackState | null): void {
-    if (diagnosed || !S.tracks.length) return;
-    diagnosed = true;
-    const it = st?.item;
-    const inList = !!it && (S.byId.has(it.id) || (!!it.linked_from?.id && S.byId.has(it.linked_from.id)) || S.tracks.some(t => t.uri === it.uri));
-    toast(!st ? 'Debug: Spotify reported nothing (no active device).'
-        : `Debug: ${st.is_playing ? 'playing' : 'paused'} “${it?.name ?? 'no song'}” on ${st.device?.name ?? '?'} (${st.device?.type ?? '?'}${st.device?.is_restricted ? ', restricted' : ''}). In list: ${inList ? 'yes' : 'no'}. Device chosen: ${S.deviceId ? (S.deviceId === st.device?.id ? 'this one' : 'another') : 'none'}.`,
-        { ms: 15000 });
-}
-
 async function poll(): Promise<void> {
     if (document.hidden) return;
     try {
@@ -312,10 +302,13 @@ async function poll(): Promise<void> {
         const st = await api<SpotifyPlaybackState | null>('/me/player', { query: { market: 'from_token' } });
         // Opened while Spotify was already playing: follow that device.
         if (!S.deviceId && st?.item && st.device?.id && !st.device.is_restricted && st.device.name !== SDK_NAME) S.deviceId = st.device.id;
-        diagnose(st);
         const onChosenDevice = !st?.device?.id || st.device.id === S.deviceId;
         if (st?.item && onChosenDevice) {
-            report({ id: st.item.id, uri: st.item.uri, linked: st.item.linked_from?.id, paused: !st.is_playing, pos: st.progress_ms ?? 0, dur: st.item.duration_ms });
+            report({
+                id: st.item.id, uri: st.item.uri, linked: st.item.linked_from?.id,
+                name: st.item.name, artists: (st.item.artists ?? []).map(a => a.name).join(', '),
+                paused: !st.is_playing, pos: st.progress_ms ?? 0, dur: st.item.duration_ms
+            });
         } else {
             // Nothing is playing on the chosen device: nothing at all, or it's playing somewhere else.
             dispatch({ type: 'spotify', id: null, paused: true, pos: curPos(), dur: 0 });

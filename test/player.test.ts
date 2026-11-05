@@ -92,6 +92,15 @@ describe('playing through the Spotify app (no browser player, as on phones)', ()
             await vi.waitFor(() => expect(S.pb).toMatchObject({ mode: 'playing', cur: 'c' }));
             expect(S.deviceId).toBe('ph');
         });
+        it('recognises another copy of a song in the list (same title and artists)', async () => {
+            S.deviceId = null;
+            vi.mocked(api).mockImplementation(async path => path === '/me/player'
+                ? { is_playing: true, progress_ms: 5000, device: { id: 'ph', name: 'iPhone', type: 'Smartphone', is_active: true },
+                    item: { id: 'single', uri: 'spotify:track:single', name: 'Song c', artists: [{ name: 'Artist c' }], duration_ms: 200_000 } }
+                : null);
+            followSpotify();
+            await vi.waitFor(() => expect(S.pb).toMatchObject({ mode: 'playing', cur: 'c' }));
+        });
         it("doesn't follow another tab's browser player", async () => {
             S.deviceId = null;
             nowPlaying({ id: 'tab', name: 'Cullture (this browser)', type: 'Computer', is_active: true });
