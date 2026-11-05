@@ -212,6 +212,14 @@ export function ratingsChanged(ids: string[]): void {
 
 /* ---------- Spotify ---------- */
 
+/** A song in the list with this title and artists, ignoring capitalisation (copies can differ, "To" vs "to"). */
+function sameSong(name?: string, artists?: string): string | undefined {
+    if (!name) return undefined;
+    const key = (n: string, a = '') => `${n}\n${a}`.toLowerCase();
+    const want = key(name, artists);
+    return S.tracks.find(t => key(t.name, t.artists) === want)?.id;
+}
+
 /** Turns a Spotify report into an event, matching the song to the open list. */
 function report({ id, uri, linked, name, artists, paused, pos, dur }: PlayerSnapshot): void {
     // When a song isn't available in your country, Spotify plays another copy of it (often from a
@@ -221,7 +229,7 @@ function report({ id, uri, linked, name, artists, paused, pos, dur }: PlayerSnap
         : id && S.byId.has(id) ? id
             : [...S.byId.values()].find(t => t.uri === uri)?.id
                 // Another copy of the same song (a single vs the album version), e.g. started in the Spotify app.
-                ?? (name ? S.tracks.find(t => t.name === name && t.artists === artists)?.id : undefined);
+                ?? sameSong(name, artists);
     dispatch({ type: 'spotify', id: tid ?? null, paused, pos: pos || 0, dur: dur || 0 });
 }
 
