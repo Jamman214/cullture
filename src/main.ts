@@ -123,6 +123,7 @@ function bindFilters(): void {
     };
     $<HTMLSelectElement>('#sort').onchange = e => {
         S.filter.sort = (e.target as HTMLSelectElement).value as SortKey;
+        S.filter.rev = false;
         if (S.filter.sort === 'shuffle') reshuffle(); // a fresh order each time it's chosen
         renderList();
     };
@@ -168,10 +169,12 @@ function bindList(): void {
         if (e.detail > 1) return; // second click of a double-click: the dblclick handler takes over
         clickSelect(id, e.ctrlKey || e.metaKey, e.shiftKey);
     });
-    // Double-click plays the song; the first click has already selected it, and it stays selected.
+    // Double-click plays the song and clears the selection.
     list.addEventListener('dblclick', e => {
         const id = closest(e, '.row')?.dataset.id;
         if (!id || closest(e, 'button,input')) return;
+        S.sel.clear();
+        syncSelDom();
         S.queue = null;
         void playSong(id);
     });
