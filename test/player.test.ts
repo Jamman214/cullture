@@ -53,10 +53,11 @@ describe('what gets sent to the browser player', () => {
         await playSong('b');
         expect(await sentToSpotify()).toEqual(['b']);
     });
-    it('explains, and sends nothing, when there is nothing to play on', async () => {
+    it('explains, and plays nowhere else, when the browser player has lost its connection', async () => {
         S.deviceId = null;
         await playSong('a');
-        await vi.waitFor(() => expect(document.querySelector('#toast')?.textContent).toMatch(/Couldn.t reach the Spotify app/));
+        await vi.waitFor(() => expect(document.querySelector('#toast')?.textContent).toMatch(/browser player lost its connection/));
+        expect(vi.mocked(api)).not.toHaveBeenCalledWith('/me/player/devices');
         expect(vi.mocked(api)).not.toHaveBeenCalledWith('/me/player/play', expect.anything());
         expect(S.pb.mode).toBe('idle');
     });
@@ -71,7 +72,8 @@ describe('playing through the Spotify app (no browser player, as on phones)', ()
         expect(lastBody()).toEqual({ context_uri: 'spotify:playlist:pl', offset: { uri: 'spotify:track:b' }, position_ms: 0 });
     });
     describe("queuing the next song in Spotify's queue", () => {
-        const queuedUris = () => vi.mocked(api).mock.calls.filter(c => c[0] === '/me/player/queue').map(c => c[1]?.query?.uri);
+        /** What was added to Spotify's queue. */
+        const queuedUris = () => vi.mocked(api).mock.calls.filter(c => c[0] === '/me/player/queue' && c[1]?.method === 'POST').map(c => c[1]?.query?.uri);
         const started = (id: string) => dispatch({ type: 'spotify', id, paused: false, pos: 0, dur: 200_000 });
         it('queues the next song once Spotify has started this one, and only once', async () => {
             S.deviceId = 'ph';
@@ -79,7 +81,34 @@ describe('playing through the Spotify app (no browser player, as on phones)', ()
             expect(queuedUris()).toEqual([]); // not before Spotify confirms
             started('b');
             started('b');
-            expect(queuedUris()).toEqual(['spotify:track:c']);
+            await vi.waitFor(() => expect(queuedUris()).toEqual(['spotify:track:c']));
+        });
+        /** Spotify's queue, as it answers when asked what's coming up. */
+        const spotifyQueue = (...ids: string[]) => vi.mocked(api).mockImplementation(async (path, o) =>
+            path === '/me/player/queue' && !o?.method ? { queue: ids.map(id => ({ id, uri: `spotify:track:${id}` })) } : null);
+        it("adds nothing when Spotify is already going to play the right song next", async () => {
+            S.deviceId = 'ph';
+            spotifyQueue('c', 'd');
+            await playSong('b');
+            started('b');
+            await vi.waitFor(() => expect(S.spotifyQueued).toBe('c'));
+            expect(queuedUris()).toEqual([]);
+        });
+        it("adds the next song when Spotify would play something else, even if Cullture thought it had queued one", async () => {
+            S.deviceId = 'ph';
+            spotifyQueue('e');
+            await playSong('b');
+            S.spotifyQueued = 'd'; // out of date: it played while the app was in the background
+            started('b');
+            await vi.waitFor(() => expect(queuedUris()).toContain('spotify:track:c'));
+        });
+        it("starts a song directly, not by skipping, when Spotify's queue shows it isn't next", async () => {
+            S.deviceId = 'ph';
+            S.spotifyQueued = 'b';
+            spotifyQueue('e');
+            await playSong('b');
+            await vi.waitFor(() => expect(lastBody()).toMatchObject({ offset: { uri: 'spotify:track:b' } }));
+            expect(vi.mocked(api)).not.toHaveBeenCalledWith('/me/player/next', expect.anything());
         });
         it('queues nothing while waiting for ratings (Spotify repeats the song instead)', async () => {
             S.deviceId = 'ph';
@@ -92,9 +121,21 @@ describe('playing through the Spotify app (no browser player, as on phones)', ()
             S.deviceId = 'ph';
             await playSong('b');
             started('b');
+            await vi.waitFor(() => expect(S.spotifyQueued).toBe('c'));
             dispatch({ type: 'next' });
             await vi.waitFor(() => expect(vi.mocked(api)).toHaveBeenCalledWith('/me/player/next', expect.anything()));
             expect(vi.mocked(api).mock.calls.filter(c => c[0] === '/me/player/play')).toHaveLength(1);
+        });
+        it('still knows the song is queued after a skip to it fails, so trying again skips to it', async () => {
+            S.deviceId = 'ph';
+            await playSong('b');
+            started('b');
+            await vi.waitFor(() => expect(S.spotifyQueued).toBe('c'));
+            vi.mocked(api).mockImplementation(async path => { if (path === '/me/player/next') throw new SpotifyError('Restricted', 403); return null; });
+            dispatch({ type: 'next' });
+            await vi.waitFor(() => expect(S.pb.mode).toBe('idle'));
+            vi.mocked(api).mockImplementation(async () => null);
+            expect(S.spotifyQueued).toBe('c');
         });
         it('when a song ends and Spotify picks another (a leftover after a jump), goes to the one that should follow', async () => {
             S.deviceId = 'ph';
@@ -112,7 +153,7 @@ describe('playing through the Spotify app (no browser player, as on phones)', ()
             started('d');
             expect(S.pb.cur).toBe('d');
             expect(lastBody()).toBeUndefined();
-            expect(queuedUris()).toEqual(['spotify:track:e']);
+            await vi.waitFor(() => expect(queuedUris()).toContain('spotify:track:e'));
         });
     });
     it('on opening, sets Spotify to repeat only when waiting for ratings, on the active device if none is chosen yet', () => {

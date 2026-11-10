@@ -91,6 +91,10 @@ export async function getToken(force = false): Promise<string> {
             body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: t.refresh ?? '', client_id: getClientId() ?? '' })
         });
         if (!r.ok) {
+            // Another tab refreshed first, which used up this refresh token: use the token it saved.
+            if (LS.get<StoredToken | null>(KEY.token, null)?.refresh !== t.refresh) return;
+            // Spotify being busy isn't a sign-out; only a refused refresh token is.
+            if (r.status >= 500 || r.status === 429) throw new Error('Spotify sign-in is busy. Try again in a moment.');
             LS.del(KEY.token);
             throw new SignedOutError('Your Spotify session expired. Connect again.');
         }

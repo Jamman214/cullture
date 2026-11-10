@@ -65,6 +65,11 @@ describe('api', () => {
         expect(err).toBeInstanceOf(SpotifyError);
         expect(err.message).toBe('Busy');
     });
+    it("doesn't repeat a POST after a server error, since Spotify may have carried it out", async () => {
+        fetchMock.mockResolvedValue(res(502));
+        await expect(api('/me/player/next', { method: 'POST' })).rejects.toMatchObject({ status: 502 });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
     it("passes on Spotify's error message and status", async () => {
         fetchMock.mockResolvedValueOnce(res(403, { error: { message: 'Premium required' } }));
         const err = await api('/me').catch(e => e);

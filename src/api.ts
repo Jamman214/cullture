@@ -14,7 +14,7 @@ interface ApiOpts {
 
 /**
  * Calls the Spotify Web API. Accepts a path ("/me") or a full URL (Spotify's `next` links).
- * Refreshes the token once on 401, waits on 429, retries brief 5xx errors.
+ * Refreshes the token once on 401, waits on 429, retries brief 5xx errors (except POST, which isn't safe to repeat).
  */
 export async function api<T = unknown>(path: string, { method = 'GET', body, query }: ApiOpts = {}): Promise<T> {
     let url = path.startsWith('http') ? path : API + path;
@@ -38,7 +38,8 @@ export async function api<T = unknown>(path: string, { method = 'GET', body, que
             });
         if (r.status === 401 && !refreshed) { refreshed = force = true; continue; }
         if (r.status === 429) { await sleep(Math.min(Number(r.headers.get('Retry-After') || 2), 30) * 1000); continue; }
-        if (r.status >= 500 && i < 2) { await sleep(700); continue; }
+        // Not POST: Spotify often answers 5xx to a request it carried out, and a repeat would queue or skip twice.
+        if (r.status >= 500 && i < 2 && method !== 'POST') { await sleep(700); continue; }
         if (!r.ok) {
             let msg = '';
             try { const j = await r.json(); msg = j.error?.message || j.error_description || ''; } catch { /* no body */ }

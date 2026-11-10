@@ -51,7 +51,7 @@ Everything else in the app calls actions that send events: `playSong`, `togglePl
 | --- | --- | --- |
 | How it plays | Web Playback SDK creates a device called "Cullture (this browser)" | Web API Spotify Connect commands |
 | Play, pause, seek | SDK methods | `PUT /me/player/...` requests |
-| Learning what's playing | SDK pushes `player_state_changed` events | Polls `GET /me/player` every 2.5 s, skipped while the tab is hidden |
+| Learning what's playing | SDK pushes `player_state_changed` events | Polls `GET /me/player` every 2.5 s, one check at a time, skipped while the tab is hidden and made at once when it's shown again |
 | Needs | Premium, a desktop browser | Premium, Spotify awake on that device (on phones: playing, or iOS puts it to sleep) |
 
 Both routes turn Spotify's reports into the same `spotify` event, after matching the song to the open list: first by the song Spotify was asked for, when it has swapped in a regional copy, then by ID, then by URI (see relinking in [spotify-integration.md](spotify-integration.md)).
@@ -70,14 +70,14 @@ Starting a song gives Spotify the next 50 songs to follow, so it keeps going by 
 
 With **Wait for a rating** on, Spotify is given only the one song, so it can't move on before you rate it.
 
-Through the Spotify app, the app instead asks Spotify to play the playlist (or Liked Songs) from the chosen song, since iPhones go silent when sent a bare list of songs. Spotify would then carry on in playlist order, so once a song is playing the app adds the next song in its own order to Spotify's queue, one at a time (Spotify's queue can't be cleared, so after a jump one queued song is left over). Next and moving on after a rating skip to the queued song. If, right as a song ends, Spotify plays something other than what should follow (a leftover, or its own pick), the app switches to the right song; a song picked in Spotify mid-song is left alone. Phones freeze the app in the background, so with **Wait for a rating** on Spotify is set to repeat the song; on return the app notices the song is over by its clock, pauses and waits.
+Through the Spotify app, the app instead asks Spotify to play the playlist (or Liked Songs) from the chosen song, since iPhones go silent when sent a bare list of songs. Spotify would then carry on in playlist order, so once a song is playing the app adds the next song in its own order to Spotify's queue, one at a time (Spotify's queue can't be cleared, so after a jump one queued song is left over). Before adding, and before deciding whether Next can skip to a song, it reads Spotify's queue (`GET /me/player/queue`): if the right song is already next, nothing is added. If the queue can't be read, it goes by the song it last queued. Next and moving on after a rating skip to the queued song. If, right as a song ends, Spotify plays something other than what should follow (a leftover, or its own pick), the app switches to the right song; a song picked in Spotify mid-song is left alone. Phones freeze the app in the background, so with **Wait for a rating** on Spotify is set to repeat the song; on return the app notices the song is over by its clock, pauses and waits.
 
 ## Spotting the end of a song
 
 The app only needs to act at the end of a song when Spotify was given it alone or **Wait for a rating** is on; otherwise Spotify moves on by itself. Two signals count as the end:
 
 - **The app's clock:** a `tick` while playing within 0.4 s of the end.
-- **Spotify's report:** a "paused" report within 2 s of the end.
+- **Spotify's report:** a "paused" report within 2 s of the end, or a report that the song has started again (Spotify is repeating it) within 2 s of the end. The app's clock runs a little behind Spotify, so the repeat can start before the clock gets there.
 
 At the end, an unrated song with the preference on goes to `waiting`. Otherwise the next song starts, or the mode becomes `ended` if there isn't one.
 

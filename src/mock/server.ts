@@ -171,6 +171,8 @@ export async function mockFetch(method: string, rawUrl: string, payload?: string
                 upNext.push(u);
                 return json(204);
             }
+            case 'GET /me/player/queue':
+                return json(200, { queue: player ? player.uris.slice(player.index + 1, player.index + 21).map(u => byUri.get(u)) : [] });
             case 'POST /me/player/next':
                 if (!player || player.index >= player.uris.length - 1) return fail(404, 'Nothing next');
                 Object.assign(player, { index: player.index + 1, pos: 0, playing: true });

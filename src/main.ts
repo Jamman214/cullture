@@ -290,6 +290,9 @@ async function loadSources(): Promise<void> {
 async function init(): Promise<void> {
     bindSetup(); bindMenu(); bindFilters(); bindList(); bindBulk(); bindDeck(); bindDialogs(); bindKeys();
     addEventListener('beforeunload', flushRatings);
+    // Phones don't send beforeunload; they freeze the page, and may close it, once it's hidden.
+    addEventListener('pagehide', flushRatings);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) flushRatings(); });
 
     try { await handleRedirect(); } catch (e) { toast(messageOf(e)); }
     if (!getClientId() || !hasToken()) return showSetup();
@@ -307,12 +310,14 @@ async function init(): Promise<void> {
     if (MOCK) $('#mockBadge').hidden = false;
 
     // Spotify's browser player doesn't run on phones; they play through the Spotify app instead.
-    const phone = /iPhone|iPad|iPod|Android/.test(navigator.userAgent);
+    // iPads say they're Macs, but Macs have no touch screen.
+    const phone = /iPhone|iPad|iPod|Android/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
     if (!MOCK && !phone) void loadSDK();
     if (MOCK || phone) {
         loopIfWaiting();
         followSpotify(); // show what Spotify is already playing
-        document.addEventListener('visibilitychange', () => { if (!document.hidden) loopIfWaiting(); });
+        // Checks weren't made while hidden, so check now rather than up to 2.5 s from now.
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) { loopIfWaiting(); followSpotify(); } });
     }
     $('[data-act="clientid"]').hidden = !!BUILT_IN_ID;
 

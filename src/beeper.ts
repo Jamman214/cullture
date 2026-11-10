@@ -9,7 +9,8 @@ const loops = new Set<AudioBufferSourceNode>();
 export function primeBeeper(): void {
     try {
         ctx ??= new AudioContext();
-        if (ctx.state === 'suspended') void ctx.resume();
+        // Not just 'suspended': iPhones leave it 'interrupted' after the app has been in the background.
+        if (ctx.state !== 'running') void ctx.resume().catch(() => { /* needs a tap first */ });
     } catch { /* no audio available */ }
 }
 

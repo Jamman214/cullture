@@ -223,7 +223,8 @@ function report(s: Playback, e: Extract<PlaybackEvent, { type: 'spotify' }>, c: 
     // Spotify pausing right at the end of the song means it finished.
     if (e.paused && sameSong && endsNow(s2, c, REPORT_MARGIN)) return ended(s2, c);
     // By the app's clock the song is over, but Spotify is repeating it (the app was frozen in the background).
-    if (!e.paused && sameSong && endsNow(s2, c, END_MARGIN)) return ended(s2, c);
+    // Or it has just started repeating, a moment before the app's clock (which runs behind Spotify) got to the end.
+    if (!e.paused && sameSong && endsNow(s2, c, e.pos < REPORT_MARGIN ? REPORT_MARGIN : END_MARGIN)) return ended(s2, c);
 
     // After a failure, stay stopped until something actually plays.
     if (s.mode === 'idle' && s.cur && e.paused) return [s2, []];

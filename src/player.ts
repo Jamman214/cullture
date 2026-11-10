@@ -14,7 +14,7 @@ import { type Context, type Effect, type Playback, type PlaybackEvent, position,
 import { S, hasTag, markPlayed, rOf, setRating, setTag } from './state';
 import { type TagKey, tagDef, tagsHtml } from './tags';
 import { toast } from './toast';
-import type { PlayerSnapshot, SpotifyDevice, SpotifyPlaybackState } from './types';
+import type { PlayerSnapshot, SpotifyDevice, SpotifyPlaybackState, SpotifyTrack } from './types';
 import { $, PAUSE_PATH, PLAY_PATH, fmt, starsHtml } from './util';
 
 /* ---------- The machine ---------- */
@@ -49,9 +49,38 @@ const context = (): Context => ({
  * Through the Spotify app, Spotify plays the playlist in its own order when a song ends. So once a
  * song is playing, Cullture adds the next one in its order to Spotify's queue, one at a time:
  * Spotify's queue can't be cleared, so after a jump a queued song is left over and plays next.
+ * It reads Spotify's queue first, and adds nothing if the right song is already next.
  */
-/** Queuing failed for this song; don't keep retrying. */
-let noQueueFor: string | null = null;
+/** The song Spotify's queue was last looked at for: once per song, and again if Cullture starts it afresh. */
+let queueSeenFor: string | null = null;
+
+/**
+ * The song Spotify will play next, or null if it isn't in the open list. Read from Spotify's
+ * queue; if that can't be read, it's taken to be the song Cullture last queued.
+ */
+async function upNext(): Promise<string | null> {
+    try {
+        const res = await api<{ queue?: SpotifyTrack[] } | null>('/me/player/queue');
+        if (!res?.queue) return S.spotifyQueued;
+        const t = res.queue[0];
+        return (t && matchSong({ id: t.id, uri: t.uri, linked: t.linked_from?.id, name: t.name, artists: (t.artists ?? []).map(a => a.name).join(', ') })) ?? null;
+    } catch {
+        return S.spotifyQueued;
+    }
+}
+
+/** Adds `next` to Spotify's queue to follow `cur`, unless Spotify is already going to play it next. */
+async function queueAfter(cur: string, next: string, uri: string): Promise<void> {
+    const head = await upNext();
+    if (S.pb.cur !== cur) return; // the song changed while asking
+    // Already next, queued earlier or simply next in the playlist: adding it would play it twice.
+    if (head === next) { S.spotifyQueued = next; return; }
+    // A leftover from before a jump is next, and nothing can go in front of it; it's put right when it plays.
+    if (S.spotifyQueued && head === S.spotifyQueued) return;
+    S.spotifyQueued = next;
+    await api('/me/player/queue', { method: 'POST', query: { uri, device_id: S.deviceId ?? '' } })
+        .catch(() => { S.spotifyQueued = null; });
+}
 
 function followQueue(before: Playback, after: Playback): void {
     // Spotify moved on by itself (when Cullture starts a song, it waits for Spotify: `expect`).
@@ -66,14 +95,13 @@ function followQueue(before: Playback, after: Playback): void {
         const want = before.cur && context().next(before.cur);
         if (atEnd && want && want !== after.cur) { dispatch({ type: 'play', id: want }); return; }
     }
-    if (S.spotifyQueued || S.opts.waitForRating || after.mode !== 'playing' || after.expect || !after.cur || noQueueFor === after.cur) return;
+    if (after.expect) queueSeenFor = null;
+    if (S.opts.waitForRating || after.mode !== 'playing' || after.expect || !after.cur || queueSeenFor === after.cur) return;
     const next = context().next(after.cur);
     const uri = next && S.byId.get(next)?.uri;
     if (!next || !uri) return;
-    S.spotifyQueued = next;
-    const cur = after.cur;
-    api('/me/player/queue', { method: 'POST', query: { uri, device_id: S.deviceId ?? '' } })
-        .catch(() => { S.spotifyQueued = null; noQueueFor = cur; });
+    queueSeenFor = after.cur;
+    void queueAfter(after.cur, next, uri);
 }
 
 /** The one place playback state changes. */
@@ -112,7 +140,7 @@ async function sendPlay(id: string, alone: boolean, positionMs: number): Promise
     void S.sdk?.activateElement();
     const device = await findDevice().catch(() => null);
     if (!device) {
-        dispatch({ type: 'failed', message: NO_PLAYER });
+        dispatch({ type: 'failed', message: S.sdk ? 'The browser player lost its connection. Try again in a moment, or reload the page.' : NO_PLAYER });
         return;
     }
     const ids = alone ? [id] : orderFrom(id).slice(0, 50); // Spotify plays these in order by itself
@@ -120,11 +148,12 @@ async function sendPlay(id: string, alone: boolean, positionMs: number): Promise
     const ctx = playlistContext();
     // iPhones stop and stay silent when sent a bare list of songs, but play from a playlist fine.
     const body = ctx ? { context_uri: ctx, offset: { uri: uris[0] } } : { uris };
-    // The song Cullture queued is next in Spotify's queue: skip to it, so it isn't left there to play again.
-    const skip = !!ctx && id === S.spotifyQueued && !positionMs;
-    if (skip) S.spotifyQueued = null;
+    // The song is next in Spotify's queue: skip to it, so it isn't left there to play again.
+    // Not while Spotify is repeating a song for "wait for a rating": nothing is queued then.
+    const skip = !!ctx && !positionMs && !S.opts.waitForRating && id === await upNext();
     try {
-        if (skip) await api('/me/player/next', { method: 'POST', query: { device_id: device } });
+        // Forgotten only once the skip worked: after a failed one it's still queued, and pressing play skips to it again.
+        if (skip) { await api('/me/player/next', { method: 'POST', query: { device_id: device } }); S.spotifyQueued = null; }
         else await api('/me/player/play', { method: 'PUT', query: { device_id: device }, body: { ...body, position_ms: Math.round(positionMs) } });
         if (ctx) await syncRepeat(device);
     } catch (e) {
@@ -258,17 +287,21 @@ function sameSong(name?: string, artists?: string): string | undefined {
     return S.tracks.find(t => key(t.name, t.artists) === want)?.id;
 }
 
-/** Turns a Spotify report into an event, matching the song to the open list. */
-function report({ id, uri, linked, name, artists, paused, pos, dur }: PlayerSnapshot): void {
+/** The song in the open list that a song from Spotify is, if any. */
+function matchSong({ id, uri, linked, name, artists }: Pick<PlayerSnapshot, 'id' | 'uri' | 'linked' | 'name' | 'artists'>): string | undefined {
     // When a song isn't available in your country, Spotify plays another copy of it (often from a
     // different album) and says which song it was asked for in `linked`. Check that first: the copy
     // may also be in the list, and matching it would jump to its place in the playlist.
-    const tid = linked && S.byId.has(linked) ? linked
+    return linked && S.byId.has(linked) ? linked
         : id && S.byId.has(id) ? id
             : [...S.byId.values()].find(t => t.uri === uri)?.id
                 // Another copy of the same song (a single vs the album version), e.g. started in the Spotify app.
                 ?? sameSong(name, artists);
-    dispatch({ type: 'spotify', id: tid ?? null, paused, pos: pos || 0, dur: dur || 0 });
+}
+
+/** Turns a Spotify report into an event, matching the song to the open list. */
+function report(snap: PlayerSnapshot): void {
+    dispatch({ type: 'spotify', id: matchSong(snap) ?? null, paused: snap.paused, pos: snap.pos || 0, dur: snap.dur || 0 });
 }
 
 /** Our browser player's device name. Other tabs' players show up in the device list under it. */
@@ -324,6 +357,8 @@ export function loadSDK(): Promise<boolean> {
 async function findDevice(): Promise<string | null> {
     await sdkLoading;
     if (S.deviceId) return S.deviceId;
+    // The browser player has dropped out and reconnects by itself; don't start playing on some other device meanwhile.
+    if (S.sdk) return null;
     const res = await api<{ devices?: SpotifyDevice[] } | null>('/me/player/devices');
     // Skip browser players from other tabs (e.g. a laptop): they'd play silently somewhere else.
     const usable = (res?.devices ?? []).filter(d => d.id && !d.is_restricted && d.name !== SDK_NAME);
@@ -341,8 +376,12 @@ export function followSpotify(): void {
     void poll();
 }
 
+/** A check is on its way. On a slow connection they'd pile up, and an older answer could arrive after a newer one. */
+let polling = false;
+
 async function poll(): Promise<void> {
-    if (document.hidden) return;
+    if (document.hidden || polling) return;
+    polling = true;
     try {
         // market=from_token makes Spotify say when it has swapped in another copy of a song
         const st = await api<SpotifyPlaybackState | null>('/me/player', { query: { market: 'from_token' } });
@@ -359,7 +398,7 @@ async function poll(): Promise<void> {
             // Nothing is playing on the chosen device: nothing at all, or it's playing somewhere else.
             dispatch({ type: 'spotify', id: null, paused: true, pos: curPos(), dur: 0 });
         }
-    } catch { /* try again next time */ }
+    } catch { /* try again next time */ } finally { polling = false; }
 }
 
 /* ---------- Drawing the player bar ---------- */

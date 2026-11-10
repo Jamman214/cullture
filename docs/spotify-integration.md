@@ -16,7 +16,7 @@ The scopes requested are listed in `config.ts`: reading and changing your librar
 
 - **401:** refreshes the token once and retries.
 - **429:** waits for Spotify's `Retry-After` time, at most 30 seconds, and retries.
-- **5xx:** retries twice after 700 ms.
+- **5xx:** retries twice after 700 ms, except for `POST` requests: Spotify often answers 5xx to a request it carried out, and repeating one would queue a song twice, skip two songs or create two playlists.
 - **Other errors:** throws `SpotifyError` with Spotify's message and the HTTP status.
 
 It gives up after six attempts in total.

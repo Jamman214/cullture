@@ -169,6 +169,12 @@ describe('the end of a song (tick)', () => {
         expect(s.mode).toBe('waiting');
         expect(kinds(fx)).toEqual(['pause']);
     });
+    it("waits when Spotify starts repeating the song just before the app's clock reaches the end", () => {
+        const before = playing({ pos: 199_000, alone: true }); // by the app's clock, 1 s left
+        const [s, fx] = transition(before, { type: 'spotify', id: 'a', paused: false, pos: 300, dur: 200_000 }, ctx({ waitForRating: true }));
+        expect(s.mode).toBe('waiting');
+        expect(kinds(fx)).toEqual(['pause']);
+    });
     it('moves on when a song gets rated some other way while waiting', () => {
         const [s] = transition(playing({ mode: 'waiting' }), { type: 'tick' }, ctx({ isRated: () => true }));
         expect(s.cur).toBe('b');
