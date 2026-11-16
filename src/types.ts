@@ -68,6 +68,8 @@ export interface PlayerSnapshot {
     /** Title and artists ("A, B"), for matching another copy of the same song. */
     name?: string;
     artists?: string;
+    /** Large artwork URL, shown for a song that isn't in the open list. */
+    big?: string;
     paused: boolean;
     pos: number;
     dur: number;

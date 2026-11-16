@@ -1,5 +1,6 @@
 /** The Cull dialog (remove low-rated songs, save keepers), confirmations, and ratings backup. */
 import { messageOf } from './api';
+import { KEY } from './config';
 import { saveCached } from './cache';
 import { TAGS } from './tags';
 import { renderList } from './list';
@@ -8,7 +9,7 @@ import { S, rOf, saveRatings, setTracks } from './state';
 import { createPlaylist, removeFromSource } from './spotify';
 import { toast } from './toast';
 import type { Ratings } from './types';
-import { $, plural } from './util';
+import { $, LS, plural } from './util';
 
 export function confirmBox(title: string, text: string, ok: string): Promise<boolean> {
     const d = $<HTMLDialogElement>('#confirmDlg');
@@ -19,10 +20,11 @@ export function confirmBox(title: string, text: string, ok: string): Promise<boo
     yes.textContent = ok;
     d.showModal();
     return new Promise(res => {
-        const done = (v: boolean) => { yes.onclick = no.onclick = null; if (d.open) d.close(); res(v); };
+        const cancel = () => done(false);
+        const done = (v: boolean) => { yes.onclick = no.onclick = null; d.removeEventListener('cancel', cancel); if (d.open) d.close(); res(v); };
         yes.onclick = () => done(true);
         no.onclick = () => done(false);
-        d.addEventListener('cancel', () => done(false), { once: true });
+        d.addEventListener('cancel', cancel, { once: true });
     });
 }
 
@@ -97,11 +99,13 @@ export async function removeTracks(ids: string[]): Promise<void> {
     } catch (e) {
         toast(`Stopped after removing ${gone.size} of ${uris.length}: ${messageOf(e)}`);
     }
-    setTracks(S.tracks.filter(t => !gone.has(t.uri)));
-    // Keep the saved copy in step, so it isn't flagged as changed on Spotify next time.
     if (src.total != null) src.total = Math.max(0, src.total - gone.size);
-    void saveCached(src, S.tracks);
-    renderList();
+    if (S.source === src) {
+        setTracks(S.tracks.filter(t => !gone.has(t.uri)));
+        // Keep the saved copy in step, so it isn't flagged as changed on Spotify next time.
+        void saveCached(src, S.tracks);
+        renderList();
+    } else LS.del(KEY.cache(src.id)); // Another playlist is open now, so its songs aren't src's: download src fresh next time.
     if (gone.size === uris.length) toast(`Removed ${plural(gone.size, 'song')} from ${label}.`);
 }
 
@@ -112,10 +116,14 @@ export async function saveKeepers(): Promise<void> {
     const uris = keepIds().map(id => S.byId.get(id)!.uri);
     btn.disabled = true;
     try {
-        const pl = await createPlaylist(S.me, name, uris);
-        S.sources.splice(1, 0, { id: pl.id, name, img: null, total: uris.length, readable: true, editable: true });
+        const { pl, added, error } = await createPlaylist(S.me, name, uris);
+        S.sources.splice(1, 0, { id: pl.id, name, img: null, total: added, readable: true, editable: true });
         $<HTMLDialogElement>('#cullDlg').close();
-        toast(`Created “${name}” with ${plural(uris.length, 'song')}.`, { link: pl.external_urls?.spotify, linkText: 'Open in Spotify' });
+        // Adding stopped part-way: the playlist exists anyway, so say what got in.
+        const text = error
+            ? `Created “${name}” but only ${added} of ${uris.length} songs were added: ${messageOf(error)}`
+            : `Created “${name}” with ${plural(uris.length, 'song')}.`;
+        toast(text, { link: pl.external_urls?.spotify, linkText: 'Open in Spotify' });
     } catch (e) {
         toast('Couldn\'t create the playlist: ' + messageOf(e));
     } finally {
@@ -143,6 +151,7 @@ export function exportRatings(): void {
 export async function importRatings(file: File): Promise<void> {
     try {
         const data = JSON.parse(await file.text()) as { ratings?: Ratings } | Ratings;
+        if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('not an export');
         const src: Ratings = ('ratings' in data && data.ratings && typeof data.ratings === 'object')
             ? (data.ratings as Ratings) : (data as Ratings);
         let n = 0;
@@ -150,9 +159,10 @@ export async function importRatings(file: File): Promise<void> {
             if (!e || typeof e !== 'object') continue;
             const cur = S.ratings[id] || {};
             const merged = { ...cur };
-            if (e.r && e.r >= 1 && e.r <= 5 && (!cur.r || (e.t || 0) > (cur.t || 0))) { merged.r = e.r; merged.t = e.t; }
+            if (Number.isInteger(e.r) && e.r! >= 1 && e.r! <= 5 && (!cur.r || (e.t || 0) > (cur.t || 0))) { merged.r = e.r; merged.t = e.t; }
             if (e.p && !cur.p) merged.p = e.p;
             for (const t of TAGS) if (e[t.key]) merged[t.key] = true;
+            if (!S.ratings[id] && !Object.keys(merged).length) continue;
             S.ratings[id] = merged;
             n++;
         }

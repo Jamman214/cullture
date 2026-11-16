@@ -44,7 +44,8 @@ export async function handleRedirect(): Promise<void> {
     if (!q.has('code') && !q.has('error')) return;
     history.replaceState(null, '', REDIRECT);
     if (q.get('error')) throw new Error(`Spotify sign-in did not finish (${q.get('error')}).`);
-    if (q.get('state') !== LS.get<string | null>(KEY.state, null)) throw new Error('Sign-in check failed. Connect again.');
+    const state = LS.get<string | null>(KEY.state, null);
+    if (!state || q.get('state') !== state) throw new Error('Sign-in check failed. Connect again.');
 
     const r = await fetch(`${ACCOUNTS}/api/token`, {
         method: 'POST',

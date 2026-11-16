@@ -1,5 +1,5 @@
 /**
- * Song tags: marks you set by hand, like instrumental or private. Each one is a key press
+ * Song tags: marks you set by hand, like instrumental or hidden. Each one is a key press
  * while a song plays, a toggle in the selection bar, a filter chip, and an icon next to the
  * title. To add a tag, add it to TAGS and to TagKey; everything else picks it up.
  */

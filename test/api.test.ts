@@ -55,6 +55,15 @@ describe('api', () => {
         await vi.advanceTimersByTimeAsync(200);
         expect(await call).toEqual({ ok: 1 });
     });
+    it("waits 2 seconds after a 429 whose Retry-After isn't a number", async () => {
+        vi.useFakeTimers();
+        fetchMock.mockResolvedValueOnce(res(429, undefined, { 'Retry-After': 'Wed, 21 Oct 2026 07:28:00 GMT' })).mockResolvedValueOnce(res(200, { ok: 1 }));
+        const call = api('/me');
+        await vi.advanceTimersByTimeAsync(1_900);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(200);
+        expect(await call).toEqual({ ok: 1 });
+    });
     it('retries a server error twice before giving up', async () => {
         vi.useFakeTimers();
         fetchMock.mockResolvedValue(res(503, { error: { message: 'Busy' } }));

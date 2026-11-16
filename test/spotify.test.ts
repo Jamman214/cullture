@@ -53,6 +53,27 @@ describe('getTracks', () => {
         const tracks = await getTracks({ ...playlist, id: 'liked', liked: true });
         expect(tracks.map(t => t.id)).toEqual(['x']);
     });
+    it("refreshes the playlist's version and song count, so it isn't later flagged as changed", async () => {
+        vi.mocked(api).mockImplementation(async (path: string) => (path === '/playlists/p1'
+            ? { snapshot_id: 'v9' }
+            : { items: [{ item: song('a') }], next: null, total: 7 }) as never);
+        const src = { ...playlist, snapshot: 'v1' };
+        await getTracks(src);
+        expect(vi.mocked(api)).toHaveBeenCalledWith('/playlists/p1', { query: { fields: 'snapshot_id' } });
+        expect(src).toMatchObject({ snapshot: 'v9', total: 7 });
+    });
+    it("keeps the old version if it can't be fetched", async () => {
+        pages({ '/playlists/p1/items?limit=50': { items: [], next: null, total: 0 } });
+        const src = { ...playlist, snapshot: 'v1' };
+        expect(await getTracks(src)).toEqual([]);
+        expect(src.snapshot).toBe('v1');
+    });
+    it('updates the Liked Songs count', async () => {
+        pages({ '/me/tracks?limit=50': { items: [], next: null, total: 12 } });
+        const src = { ...playlist, id: 'liked', liked: true };
+        await getTracks(src);
+        expect(src.total).toBe(12);
+    });
     it('reports progress after each page', async () => {
         pages({ '/playlists/p1/items?limit=50': { items: [{ item: song('a') }], next: null, total: 1 } });
         const progress = vi.fn();

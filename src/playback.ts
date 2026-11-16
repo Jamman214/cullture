@@ -53,8 +53,11 @@ export type PlaybackEvent =
     | { type: 'next'; from?: string }
     | { type: 'prev' }
     | { type: 'seek'; ms: number }
-    /** What Spotify says is happening. `id` is null if the song isn't in the open list. */
-    | { type: 'spotify'; id: string | null; paused: boolean; pos: number; dur: number }
+    /**
+     * What Spotify says is happening. `id` is null if the song isn't in the open list: with `other`,
+     * a real song to show (unrated, so never waited on); without it, nothing is playing on the device.
+     */
+    | { type: 'spotify'; id: string | null; paused: boolean; pos: number; dur: number; other?: boolean }
     /** Sent four times a second, to notice a song ending. */
     | { type: 'tick' }
     /** A song's rating changed. `advance` asks to move on (the "go to next song after rating" option). */
@@ -128,11 +131,12 @@ export function transition(s: Playback, e: PlaybackEvent, c: Context): Result {
         }
 
         case 'seek': {
-            if (!s.cur || s.mode === 'idle') return [s, []];
+            // With no `cur` while playing or paused, it's a song from outside the list; it can be seeked too.
+            if (s.mode === 'idle') return [s, []];
             const ms = Math.max(0, Math.min(s.dur - 1000, e.ms));
             if (s.mode === 'waiting' || s.mode === 'ended') {
                 // The song is over; seeking back plays it again from there. Forward has nowhere to go.
-                if (ms >= s.dur - 1000) return [s, []];
+                if (!s.cur || ms >= s.dur - 1000) return [s, []];
                 return start(s.cur, ms, c);
             }
             return [{ ...s, pos: ms, at: c.now, hold: c.now + HOLD_MS }, [{ kind: 'seek', ms }]];
@@ -215,7 +219,8 @@ function report(s: Playback, e: Extract<PlaybackEvent, { type: 'spotify' }>, c: 
         else { expect = null; didntStart = e.paused; } // gave up waiting: the device never started the song
     }
     const s2 = expect === s.expect ? s : { ...s, expect };
-    const sameSong = !e.id || e.id === s.cur;
+    // A song from outside the list is the same song only if one is already showing (no `cur`).
+    const sameSong = e.other ? !s.cur : !e.id || e.id === s.cur;
 
     // Just seeked: an older report would flick the position back to where it was.
     if (sameSong && s.hold && c.now < s.hold && e.paused === (s.mode === 'paused')) return [s2, []];
@@ -232,8 +237,12 @@ function report(s: Playback, e: Extract<PlaybackEvent, { type: 'spotify' }>, c: 
     // A finished song stays finished, unless a different song has started playing.
     if ((s.mode === 'waiting' || s.mode === 'ended') && (sameSong || e.paused)) return [s2, []];
 
+    const toastDidntStart = didntStart ? [{ kind: 'toast', text: DIDNT_START } as Effect] : [];
+    // Shown with no `cur`: nothing to rate, wait on, mark played or queue after.
+    if (e.other) return [{ mode: e.paused ? 'paused' : 'playing', cur: null, pos: e.pos, at: c.now, dur: e.dur, alone: false, expect }, toastDidntStart];
     const cur = e.id ?? s.cur;
-    if (!cur) return [s2, []];
+    // Nothing is playing on the device any more: stop showing the outside song.
+    if (!cur) return [s.mode === 'idle' ? s2 : { ...s2, mode: 'idle' }, []];
     const changed = cur !== s.cur;
     return [
         {
@@ -244,7 +253,7 @@ function report(s: Playback, e: Extract<PlaybackEvent, { type: 'spotify' }>, c: 
         },
         [
             ...(changed ? [{ kind: 'played', id: cur } as Effect] : []),
-            ...(didntStart ? [{ kind: 'toast', text: DIDNT_START } as Effect] : [])
+            ...toastDidntStart
         ]
     ];
 }

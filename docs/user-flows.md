@@ -32,7 +32,7 @@ Removal is disabled for playlists you can't edit.
 
 ## Keepers playlist
 
-The second half of the Cull dialog saves songs rated at or above 3, 4 or 5 stars to a new private playlist with the name you give. It's added to the picker, and the toast links to it in Spotify.
+The second half of the Cull dialog saves songs rated at or above 3, 4 or 5 stars to a new private playlist with the name you give. It's added to the picker, and the toast links to it in Spotify. If the playlist was created but adding songs stopped part-way, it's still added to the picker, and the toast says how many of the songs got in and why it stopped; nothing is retried.
 
 ## Backup
 
@@ -40,9 +40,9 @@ The second half of the Cull dialog saves songs rated at or above 3, 4 or 5 stars
 
 ## Tags
 
-Songs can be marked **instrumental** or **private**. Press **I** or **P** while a song plays to toggle it; a notification confirms it, with **Undo**. To tag several songs, select them and use the ♪ or padlock toggle in the selection bar, which is pressed when every selected song already has that tag, and removes it when pressed again. On phones the selection bar is the way to tag, since there are no keys.
+Songs can be marked **instrumental** or **hidden**. Press **I** or **H** while a song plays to toggle it; a notification confirms it, with **Undo**. To tag several songs, select them and use the ♪ or crossed-out eye toggle in the selection bar, which is pressed when every selected song already has that tag, and removes it when pressed again. On phones the selection bar is the way to tag, since there are no keys.
 
-Tags show as icons after the song's title, in the list and the player bar. The ♪ and padlock chips after the star chips show only songs with those tags; they combine with each other and with the other filters. Tags are saved with ratings and included in export and import.
+Tags show as icons after the song's title, in the list and the player bar. The ♪ and crossed-out eye chips after the star chips filter by those tags: one click hides songs with the tag, a second shows only those, a third turns it off; they combine with each other and with the other filters. Tags are saved with ratings and included in export and import.
 
 ## Random order
 

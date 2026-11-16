@@ -270,5 +270,39 @@ describe('reports from Spotify', () => {
     it('keeps the current song when the reported one is not in the list', () => {
         expect(transition(playing(), report(null, false, 7_000), ctx())[0]).toMatchObject({ cur: 'a', pos: 7_000 });
     });
+
+    describe('a song from outside the open list', () => {
+        const other = (paused = false, pos = 5_000) => ({ ...report(null, paused, pos), other: true });
+        it('shows as playing, with no current song and nothing marked played', () => {
+            const [s, fx] = transition(playing({ alone: true }), other(false, 7_000), ctx());
+            expect(s).toMatchObject({ mode: 'playing', cur: null, pos: 7_000, dur: 200_000, alone: false });
+            expect(fx).toEqual([]);
+        });
+        it('never waits for a rating, even at its end', () => {
+            const c = ctx({ waitForRating: true });
+            const [s] = transition(initialPlayback, other(false, 199_900), c);
+            const [ended] = transition(s, other(true, 0), { ...c, now: 101_000 });
+            expect(ended.mode).toBe('paused');
+            expect(transition(s, { type: 'tick' }, { ...c, now: 200_000 })[0].mode).toBe('playing');
+        });
+        it('can be paused and seeked', () => {
+            const [s] = transition(initialPlayback, other(), ctx());
+            const [paused, fx] = transition(s, { type: 'toggle' }, ctx());
+            expect(paused.mode).toBe('paused');
+            expect(kinds(fx)).toEqual(['pause']);
+            expect(kinds(transition(s, { type: 'seek', ms: 60_000 }, ctx())[1])).toEqual(['seek']);
+        });
+        it('is still ignored while waiting for a requested song to start', () => {
+            const before = playing({ cur: 'b', expect: { id: 'b', until: 104_000 } });
+            expect(transition(before, other(), ctx())[0]).toBe(before);
+        });
+        it('goes away when nothing is playing on the device', () => {
+            const [s] = transition(initialPlayback, other(), ctx());
+            expect(transition(s, report(null, true), ctx())[0]).toMatchObject({ mode: 'idle', cur: null });
+        });
+    });
+    it('a plain "nothing playing" report still just pauses the current song', () => {
+        expect(transition(playing(), report(null, true, 7_000), ctx())[0]).toMatchObject({ mode: 'paused', cur: 'a', pos: 7_000 });
+    });
 });
 

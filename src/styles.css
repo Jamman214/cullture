@@ -1467,7 +1467,7 @@ dialog .row-actions {
     }
 }
 
-/* Tags (instrumental, private): shown as small icons */
+/* Tags (instrumental, hidden): shown as small icons */
 .tag-icon {
     width: 13px;
     height: 13px;

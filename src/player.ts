@@ -249,7 +249,7 @@ export function rateCurrent(r: number | null): void {
     dispatch({ type: 'rated', id, advance: !!r && S.opts.autoAdvance });
 }
 
-/** Toggles a tag on the playing song (the I and P keys). */
+/** Toggles a tag on the playing song (the I and H keys). */
 export function toggleTagCurrent(tag: TagKey): void {
     const id = S.pb.cur;
     if (!id) return;
@@ -299,10 +299,19 @@ function matchSong({ id, uri, linked, name, artists }: Pick<PlayerSnapshot, 'id'
                 ?? sameSong(name, artists);
 }
 
+/** What Spotify last reported playing that isn't in the open list; shown when the state has no `cur`. */
+let otherSong: { name: string; artists: string; big: string } | null = null;
+
 /** Turns a Spotify report into an event, matching the song to the open list. */
 function report(snap: PlayerSnapshot): void {
-    dispatch({ type: 'spotify', id: matchSong(snap) ?? null, paused: snap.paused, pos: snap.pos || 0, dur: snap.dur || 0 });
+    const id = matchSong(snap) ?? null;
+    const other = !id && !!snap.uri;
+    otherSong = other ? { name: snap.name ?? '', artists: snap.artists ?? '', big: snap.big ?? '' } : null;
+    dispatch({ type: 'spotify', id, other, paused: snap.paused, pos: snap.pos || 0, dur: snap.dur || 0 });
 }
+
+/** The largest image's URL (the browser player lists them in no set order). */
+const biggest = (imgs: Spotify.Image[] = []) => imgs.reduce((a, b) => ((b.width ?? 0) > (a.width ?? 0) ? b : a), imgs[0])?.url;
 
 /** Our browser player's device name. Other tabs' players show up in the device list under it. */
 const SDK_NAME = 'Cullture (this browser)';
@@ -337,7 +346,7 @@ export function loadSDK(): Promise<boolean> {
             p.addListener('player_state_changed', st => {
                 if (!st) return;
                 const ct = st.track_window?.current_track;
-                report({ id: ct?.id, uri: ct?.uri, linked: ct?.linked_from?.id, name: ct?.name, artists: ct?.artists.map(a => a.name).join(', '), paused: st.paused, pos: st.position, dur: st.duration });
+                report({ id: ct?.id, uri: ct?.uri, linked: ct?.linked_from?.id, name: ct?.name, artists: ct?.artists.map(a => a.name).join(', '), big: biggest(ct?.album.images), paused: st.paused, pos: st.position, dur: st.duration });
             });
             p.connect();
         };
@@ -391,7 +400,7 @@ async function poll(): Promise<void> {
         if (st?.item && onChosenDevice) {
             report({
                 id: st.item.id, uri: st.item.uri, linked: st.item.linked_from?.id,
-                name: st.item.name, artists: (st.item.artists ?? []).map(a => a.name).join(', '),
+                name: st.item.name, artists: (st.item.artists ?? []).map(a => a.name).join(', '), big: st.item.album?.images?.[0]?.url,
                 paused: !st.is_playing, pos: st.progress_ms ?? 0, dur: st.item.duration_ms
             });
         } else {
@@ -417,14 +426,18 @@ export function renderDeck(): void {
     const { mode, cur } = S.pb;
     const t = cur ? S.byId.get(cur) : undefined;
     const waiting = mode === 'waiting';
+    // A song from outside the open list: shown, but there's nothing to rate or tag.
+    const o = !cur && (mode === 'playing' || mode === 'paused') ? otherSong : null;
+    const shown = t ?? o;
 
-    $('#dArt').style.backgroundImage = t?.big ? `url('${t.big}')` : '';
-    $('#dTitle').textContent = t ? t.name : 'Nothing playing';
-    $('#dArtist').textContent = t ? t.artists : 'Press Resume or play any song';
+    $('#dArt').style.backgroundImage = shown?.big ? `url('${shown.big}')` : '';
+    $('#dTitle').textContent = shown ? shown.name : 'Nothing playing';
+    $('#dArtist').textContent = shown ? shown.artists : 'Press Resume or play any song';
 
     // Build the stars once, then only switch colours, so hover and transitions aren't interrupted.
     const r = t ? rOf(t.id) : 0;
     const st = $('#dStars');
+    st.hidden = !!o;
     if (!st.children.length) st.innerHTML = starsHtml(r);
     st.dataset.r = String(r);
     st.querySelectorAll<HTMLElement>('.star').forEach(b => b.classList.toggle('on', r >= Number(b.dataset.v)));

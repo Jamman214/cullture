@@ -7,7 +7,7 @@ import { clickSelect, renderBulk, renderList, renderSummary, reshuffle, resumeTa
 import {
     followSpotify, goNext, goPrev, loadSDK, loopIfWaiting, playSong, prefsChanged, rateCurrent, ratingsChanged, renderDeck, seekBy, seekToFraction, setDragging, toggleTagCurrent, togglePlay
 } from './player';
-import { S, flushRatings, hasTag, rOf, saveOpts, setRating, setTag } from './state';
+import { S, flushRatings, hasTag, rOf, reloadRatings, saveOpts, setRating, setTag } from './state';
 import { nextTagFilter, TAGS, type TagKey, tagDef } from './tags';
 import { getMe, getSources } from './spotify';
 import { toast } from './toast';
@@ -20,7 +20,7 @@ import { downloadSource, openSource, renderPicker, show, showSetup } from './vie
  * list doesn't move and filters aren't reapplied until you next change them.
  */
 function bulkRate(ids: string[], r: number | null): void {
-    const prev = ids.map(id => [id, rOf(id)] as const);
+    const prev = ids.map(id => [id, rOf(id), S.ratings[id]?.t] as const);
     const refresh = () => {
         for (const id of ids) updateRow(id);
         renderSummary();
@@ -30,7 +30,7 @@ function bulkRate(ids: string[], r: number | null): void {
     refresh();
     toast(r ? `Rated ${plural(ids.length, 'song')} ${r}★` : `Cleared ratings on ${plural(ids.length, 'song')}`, {
         undo: () => {
-            for (const [id, old] of prev) setRating([id], old || null);
+            for (const [id, old, t] of prev) setRating([id], old || null, t);
             refresh();
         }
     });
@@ -77,7 +77,7 @@ function bindMenu(): void {
         switch (act) {
             case 'reload':
                 if (S.source) void openSource(S.source.id, { refresh: true });
-                else void loadSources().then(renderPicker);
+                else void loadSources().then(renderPicker).catch((e: unknown) => toast(messageOf(e)));
                 break;
             case 'export': exportRatings(); break;
             case 'import': $('#importFile').click(); break;
@@ -293,6 +293,12 @@ async function init(): Promise<void> {
     // Phones don't send beforeunload; they freeze the page, and may close it, once it's hidden.
     addEventListener('pagehide', flushRatings);
     document.addEventListener('visibilitychange', () => { if (document.hidden) flushRatings(); });
+    // Another tab saved ratings (this event only fires in other tabs): show them, rather than saving over them later.
+    addEventListener('storage', e => {
+        if (e.key !== KEY.ratings) return;
+        reloadRatings();
+        if (S.source) { renderList(); renderDeck(); }
+    });
 
     try { await handleRedirect(); } catch (e) { toast(messageOf(e)); }
     if (!getClientId() || !hasToken()) return showSetup();

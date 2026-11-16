@@ -119,6 +119,12 @@ export async function mockFetch(method: string, rawUrl: string, payload?: string
         return json(201, playlistObj(p));
     }
 
+    const one = route.match(/^GET \/playlists\/([^/]+)$/);
+    if (one) {
+        const p = lib.playlists.find(x => x.id === one[1]);
+        return p ? json(200, playlistObj(p)) : fail(404, 'Playlist not found');
+    }
+
     const items = path.match(/^\/playlists\/([^/]+)\/items$/);
     if (items) {
         const p = lib.playlists.find(x => x.id === items[1]);

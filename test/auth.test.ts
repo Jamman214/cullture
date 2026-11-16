@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SignedOutError, getToken, hasToken } from '../src/auth';
+import { SignedOutError, getToken, handleRedirect, hasToken } from '../src/auth';
 import { KEY } from '../src/config';
 
 const expired = { access: 'old', refresh: 'r1', exp: 0 };
@@ -26,5 +26,15 @@ describe('refreshing the sign-in', () => {
             return new Response('{}', { status: 400 });
         }));
         expect(await getToken()).toBe('new');
+    });
+});
+
+describe('finishing sign-in', () => {
+    it("refuses a redirect when no sign-in was started, even if it carries no state either", async () => {
+        history.replaceState(null, '', '/?code=abc');
+        const fetchMock = vi.fn();
+        vi.stubGlobal('fetch', fetchMock);
+        await expect(handleRedirect()).rejects.toThrow(/Sign-in check failed/);
+        expect(fetchMock).not.toHaveBeenCalled();
     });
 });

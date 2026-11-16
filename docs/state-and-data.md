@@ -14,13 +14,13 @@ All runtime state lives in one object, `S`, exported from `state.ts`. Modules re
 
 A `Track` is trimmed from Spotify's song object to `id`, `uri`, `name`, `artists`, `album`, two image URLs, `dur`, `added` and `idx` (its position in the playlist). Local files, podcast episodes and duplicate songs are skipped when loading.
 
-Each rating entry is `{ r, t, p, inst, priv }`: the rating from 1 to 5, when it was rated, when the song was first played (both in milliseconds), and its tags. An entry is deleted once it has no rating, no play and no tags. A song counts as played if it has either.
+Each rating entry is `{ r, t, p, inst, hid }`: the rating from 1 to 5, when it was rated, when the song was first played (both in milliseconds), and its tags. An entry is deleted once it has no rating, no play and no tags. A song counts as played if it has either.
 
 ## Saved data in localStorage
 
 | Key | Holds |
 | --- | --- |
-| `culler:ratings` | Every rating entry, keyed by track ID (saved 250 ms after the last change, and on page close) |
+| `culler:ratings` | Every rating entry, keyed by track ID (saved 250 ms after the last change, and on page close). When another tab saves it, this tab reloads it and redraws; a change made here in the 250 ms before that is lost |
 | `culler:opts` | The three preferences: skip rated songs, go to next after rating, wait for a rating |
 | `culler:token` | Access token, refresh token, expiry time |
 | `culler:clientId` | Your Spotify app's Client ID |

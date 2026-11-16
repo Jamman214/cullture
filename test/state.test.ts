@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { S, hasTag, markPlayed, playedOf, rOf, setRating, setTag, setTracks } from '../src/state';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { KEY } from '../src/config';
+import { S, hasTag, markPlayed, playedOf, rOf, reloadRatings, setRating, setTag, setTracks } from '../src/state';
 import { reset, track } from './helpers';
 
 beforeEach(() => reset());
@@ -9,6 +10,10 @@ describe('ratings', () => {
         setRating(['a'], 4);
         expect(rOf('a')).toBe(4);
         expect(S.ratings.a.t).toBeTypeOf('number');
+    });
+    it('can be given the time it was rated, so undo restores it', () => {
+        setRating(['a'], 4, 123);
+        expect(S.ratings.a.t).toBe(123);
     });
     it('rates several songs at once', () => {
         setRating(['a', 'b'], 2);
@@ -79,5 +84,24 @@ describe('setTracks', () => {
         S.sel = new Set(['x', 'y']);
         setTracks([track('y')]);
         expect([...S.sel]).toEqual(['y']);
+    });
+    it('drops songs no longer in the list from the play-selected order', () => {
+        setTracks([track('x'), track('y')]);
+        S.queue = ['x', 'y'];
+        setTracks([track('y')]);
+        expect(S.queue).toEqual(['y']);
+    });
+});
+
+describe('ratings saved by another tab', () => {
+    it("are taken up, and this tab's pending save doesn't write over them", () => {
+        vi.useFakeTimers();
+        setRating(['a'], 2); // saved a moment later
+        localStorage.setItem(KEY.ratings, JSON.stringify({ b: { r: 5, t: 1 } }));
+        reloadRatings();
+        vi.advanceTimersByTime(1000);
+        vi.useRealTimers();
+        expect([rOf('a'), rOf('b')]).toEqual([0, 5]);
+        expect(JSON.parse(localStorage.getItem(KEY.ratings)!)).toEqual({ b: { r: 5, t: 1 } });
     });
 });

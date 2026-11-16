@@ -37,6 +37,13 @@ export async function getSources(me: SpotifyUser): Promise<Source[]> {
 export async function getTracks(src: Source, onProgress?: (loaded: number, total: number) => void): Promise<Track[]> {
     const out: Track[] = [];
     const seen = new Set<string>();
+    // Refresh the version info too, so the saved copy isn't flagged as changed on Spotify next time.
+    if (!src.liked) {
+        try {
+            const pl = await api<{ snapshot_id?: string }>(`/playlists/${src.id}`, { query: { fields: 'snapshot_id' } });
+            if (pl?.snapshot_id) src.snapshot = pl.snapshot_id;
+        } catch { /* keep the old one */ }
+    }
     let next: string | null = src.liked ? `/me/tracks?limit=${PAGE}` : `/playlists/${src.id}/items?limit=${PAGE}`;
     while (next) {
         const pg: Paging<SpotifyListItem> = await api(next);
@@ -56,6 +63,7 @@ export async function getTracks(src: Source, onProgress?: (loaded: number, total
                 idx: out.length
             });
         }
+        src.total = pg.total;
         onProgress?.(out.length, pg.total);
         next = pg.next;
     }
@@ -89,7 +97,11 @@ export async function removeFromSource(src: Source, uris: string[], onBatch: (do
     }
 }
 
-export async function createPlaylist(me: SpotifyUser, name: string, uris: string[]): Promise<SpotifyPlaylist> {
+/**
+ * Creates a playlist and adds the songs. Throws only if it couldn't be created; if adding stops
+ * part-way, the playlist exists, so it's returned with how many songs got in and the error.
+ */
+export async function createPlaylist(me: SpotifyUser, name: string, uris: string[]): Promise<{ pl: SpotifyPlaylist; added: number; error?: unknown }> {
     const body = { name, public: false, description: 'Songs I kept, sorted with Cullture' };
     let pl: SpotifyPlaylist;
     try {
@@ -99,8 +111,14 @@ export async function createPlaylist(me: SpotifyUser, name: string, uris: string
         if (s !== 404 && s !== 405) throw e;
         pl = await api<SpotifyPlaylist>(`/users/${me.id}/playlists`, { method: 'POST', body });
     }
-    for (const part of chunk(uris, WRITE_BATCH)) {
-        await api(`/playlists/${pl.id}/items`, { method: 'POST', body: { uris: part } });
+    let added = 0;
+    try {
+        for (const part of chunk(uris, WRITE_BATCH)) {
+            await api(`/playlists/${pl.id}/items`, { method: 'POST', body: { uris: part } });
+            added += part.length;
+        }
+    } catch (error) {
+        return { pl, added, error };
     }
-    return pl;
+    return { pl, added };
 }

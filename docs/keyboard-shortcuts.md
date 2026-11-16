@@ -12,7 +12,7 @@ Shortcuts work on the workspace screen, except while typing in the search box or
 | N | Next song |
 | M | Jump to the middle of the song |
 | I | Mark or unmark the playing song as instrumental |
-| P | Mark or unmark the playing song as private |
+| H | Mark or unmark the playing song as hidden |
 | / | Focus the search box |
 | Esc | Clear the selection |
 

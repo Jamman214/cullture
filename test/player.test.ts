@@ -186,6 +186,18 @@ describe('playing through the Spotify app (no browser player, as on phones)', ()
             followSpotify();
             await vi.waitFor(() => expect(S.pb).toMatchObject({ mode: 'playing', cur: 'c' }));
         });
+        it("shows a song that isn't in the list, without stars", async () => {
+            S.deviceId = 'ph';
+            vi.mocked(api).mockImplementation(async path => path === '/me/player'
+                ? { is_playing: true, progress_ms: 5000, device: { id: 'ph', name: 'iPhone', type: 'Smartphone', is_active: true },
+                    item: { id: 'zz', uri: 'spotify:track:zz', name: 'Elsewhere', artists: [{ name: 'Someone' }], duration_ms: 200_000 } }
+                : null);
+            followSpotify();
+            await vi.waitFor(() => expect(document.querySelector('#dTitle')?.textContent).toBe('Elsewhere'));
+            expect(S.pb).toMatchObject({ mode: 'playing', cur: null });
+            expect(document.querySelector('#dArtist')?.textContent).toBe('Someone');
+            expect((document.querySelector('#dStars') as HTMLElement).hidden).toBe(true);
+        });
         it("doesn't follow another tab's browser player", async () => {
             S.deviceId = null;
             nowPlaying({ id: 'tab', name: 'Cullture (this browser)', type: 'Computer', is_active: true });

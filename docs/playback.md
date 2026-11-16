@@ -9,7 +9,7 @@ Songs play either in the browser tab or on another Spotify device. Playback is r
 | Field | Meaning |
 | --- | --- |
 | `mode` | `idle`, `playing`, `paused`, `waiting` or `ended` |
-| `cur` | The current song's ID |
+| `cur` | The current song's ID; null while showing a song that isn't in the open list |
 | `pos`, `at` | Position in ms, and when it was read; while playing, the real position is `pos + (now − at)` |
 | `dur` | The current song's length |
 | `alone` | Spotify was given only this song, so the app has to start the next one itself |
@@ -56,7 +56,9 @@ Everything else in the app calls actions that send events: `playSong`, `togglePl
 
 Both routes turn Spotify's reports into the same `spotify` event, after matching the song to the open list: first by the song Spotify was asked for, when it has swapped in a regional copy, then by ID, then by URI (see relinking in [spotify-integration.md](spotify-integration.md)).
 
-For other devices, a check that finds nothing playing on the chosen device, either nothing at all or something on another device, counts as paused. If a song you asked for hasn't started within four seconds, the machine shows a notification saying nothing started on that device.
+A song that isn't in the open list (for example one started in the Spotify app) is reported with `other`. The player bar shows its title, artists and artwork with a moving seek bar, and play, pause and seek work, but the state has no `cur`, so the stars are hidden and it's never waited on, marked played, highlighted in the list or followed in Spotify's queue. Next goes to Resume. Reports about it are still ignored while a requested song is starting (`expect`).
+
+For other devices, a check that finds nothing playing on the chosen device, either nothing at all or something on another device, counts as paused (or, if a song from outside the list was showing, as nothing playing). If a song you asked for hasn't started within four seconds, the machine shows a notification saying nothing started on that device.
 
 `loadSDK` loads Spotify's script at start-up and waits up to 15 seconds for the browser player. If it's ready, it becomes the device unless you picked a different one last time.
 

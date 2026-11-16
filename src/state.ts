@@ -49,15 +49,22 @@ export function flushRatings(): void {
     clearTimeout(saveTimer);
     LS.set(KEY.ratings, S.ratings, storageError);
 }
+/** Another tab saved ratings: take its copy. A pending save here would only write that copy back, so it's dropped. */
+export function reloadRatings(): void {
+    // shortcut: a change made here in the 250 ms before the other tab saved is lost, merge per song if that bites
+    clearTimeout(saveTimer);
+    S.ratings = LS.get<Ratings>(KEY.ratings, {});
+}
 export function saveOpts(): void { LS.set(KEY.opts, S.opts); }
 
 export const rOf = (id: string | null | undefined): number => (id && S.ratings[id]?.r) || 0;
 export const playedOf = (id: string): boolean => !!(S.ratings[id]?.p || S.ratings[id]?.r);
 
-export function setRating(ids: string[], r: number | null): void {
+/** `t` is when it was rated; undo passes the original time back. */
+export function setRating(ids: string[], r: number | null, t = Date.now()): void {
     for (const id of ids) {
         const e = S.ratings[id] || (S.ratings[id] = {});
-        if (r) { e.r = r; e.t = Date.now(); } else delete e.r;
+        if (r) { e.r = r; e.t = t; } else delete e.r;
         if (isEmpty(e)) delete S.ratings[id];
     }
     saveRatings();
@@ -91,4 +98,5 @@ export function setTracks(tracks: Track[]): void {
     S.tracks.forEach((t, i) => { t.idx = i; });
     S.byId = new Map(S.tracks.map(t => [t.id, t]));
     for (const id of [...S.sel]) if (!S.byId.has(id)) S.sel.delete(id);
+    if (S.queue) S.queue = S.queue.filter(id => S.byId.has(id));
 }

@@ -37,7 +37,12 @@ export async function api<T = unknown>(path: string, { method = 'GET', body, que
                 headers: { Authorization: 'Bearer ' + tok, ...(payload === undefined ? {} : { 'Content-Type': 'application/json' }) }
             });
         if (r.status === 401 && !refreshed) { refreshed = force = true; continue; }
-        if (r.status === 429) { await sleep(Math.min(Number(r.headers.get('Retry-After') || 2), 30) * 1000); continue; }
+        if (r.status === 429) {
+            // Retry-After may be an HTTP date, which Number() makes NaN.
+            const wait = Number(r.headers.get('Retry-After'));
+            await sleep(Math.min(Number.isFinite(wait) && wait > 0 ? wait : 2, 30) * 1000);
+            continue;
+        }
         // Not POST: Spotify often answers 5xx to a request it carried out, and a repeat would queue or skip twice.
         if (r.status >= 500 && i < 2 && method !== 'POST') { await sleep(700); continue; }
         if (!r.ok) {
