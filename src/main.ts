@@ -2,7 +2,7 @@ import './styles.css';
 import { messageOf } from './api';
 import { SignedOutError, getClientId, handleRedirect, hasToken, login, setClientId, signOut } from './auth';
 import { BUILT_IN_ID, KEY, MOCK, REDIRECT } from './config';
-import { closeStats, openStats, pickArtist, renderStats, setRankBy, setScope } from './dashboard';
+import { closeStats, openStats, pickArtist, placeTip, renderStats, setLook, setRankBy, setScope, tip } from './dashboard';
 import { exportRatings, importRatings, openCull, refreshCull, removeTracks, reviewCull, cullIds, saveKeepers } from './cull';
 import { clickSelect, renderBulk, renderList, renderSummary, reshuffle, resumeTarget, showMore, syncSelDom, toggleSel, updateBarSpace, updateRow } from './list';
 import {
@@ -72,11 +72,32 @@ function bindStats(): void {
     };
     // A button, so Enter and Space open an artist too.
     $('#statsBody').onclick = e => {
-        const a = closest(e, '.tm-cell')?.dataset.a;
-        if (a != null) pickArtist(a);
+        const cell = closest(e, '.tm-cell');
+        if (cell?.dataset.a != null) {
+            pickArtist(cell.dataset.a);
+            // A tap (not a mouse click, nor Enter, which has detail 0) shows the tooltip hover would.
+            if ((e as MouseEvent).detail && lastPointer !== 'mouse') tip(cell, true);
+        }
         const r = closest(e, '[data-rank]');
         if (r) setRankBy(r.closest('.st-card')?.id ?? '', r.dataset.rank ?? '');
+        const look = closest(e, '[data-look]')?.dataset.look;
+        if (look) setLook(look);
     };
+    // The treemap's tooltip, delegated: mouse hover and keyboard focus here; taps above.
+    let lastPointer = '';
+    const body = $('#statsBody');
+    // lastPointer, not the event's type: a scroll after a tap can send mouse boundary events where the pointer last was.
+    const mouse = () => lastPointer === 'mouse';
+    body.addEventListener('pointerover', e => { const c = closest(e, '.tm-cell'); if (c && mouse()) tip(c); });
+    body.addEventListener('pointerout', e => { if (mouse() && !(e.relatedTarget as Element | null)?.closest?.('.tm-cell')) tip(null); });
+    body.addEventListener('focusin', e => { const c = closest(e, '.tm-cell'); if (c?.matches(':focus-visible')) tip(c); });
+    // Focus moving to nothing (a tap on plain text) is left to pointerdown below, so a tap's tooltip stays.
+    body.addEventListener('focusout', e => { const to = e.relatedTarget as Element | null; if (to && !to.closest('.tm-cell')) tip(null); });
+    body.addEventListener('keydown', e => { if (e.key === 'Escape') tip(null); });
+    document.addEventListener('pointermove', e => { lastPointer = e.pointerType; }, { passive: true });
+    document.addEventListener('pointerdown', e => { lastPointer = e.pointerType; if (!closest(e, '.tm-cell')) tip(null); });
+    addEventListener('scroll', placeTip, { passive: true, capture: true });
+    addEventListener('resize', () => tip(null));
     // Treemap colours and text are worked out from the theme's rating colours, so redraw when it changes.
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (!$('#stats').hidden) void renderStats(); });
 }

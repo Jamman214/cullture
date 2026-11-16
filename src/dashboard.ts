@@ -2,7 +2,8 @@
 import { loadAllCached } from './cache';
 import { KEY } from './config';
 import { S } from './state';
-import { type Group, type RankBy, type Stats, artistDetail, computeStats, darkText, mergeDetails, rank, ratingColor, treemap } from './stats';
+import { getArtistImages } from './spotify';
+import { type Group, type RankBy, type Stats, artistCover, artistDetail, artistIdsByName, computeStats, darkText, mergeDetails, rank, ratingColor, tileLabel, treemap } from './stats';
 import { TAGS } from './tags';
 import type { Track } from './types';
 import { $, LS, STAR, esc, plural } from './util';
@@ -33,6 +34,12 @@ for (const id of ['topArtists', 'topAlbums'] as const) {
     const by = LS.get<RankBy>(RANK_KEY[id], 'weighted');
     rankBy[id] = validRank(by) ? by : 'weighted';
 }
+/** Treemap tiles in rating colours, or with artist photos (album covers where there's none). */
+let photoTiles = LS.get<string>(KEY.artistTiles, 'colours') === 'photos';
+/** Artist photo URL by Spotify artist ID, '' when Spotify has none; saved so each artist is asked for once. */
+const photos = LS.get<Record<string, string>>(KEY.artistPhotos, {});
+/** IDs asked for this session, so a failed or running request isn't repeated on every redraw. */
+const asked = new Set<string>();
 
 /** Opens the screen: on this playlist when coming from its song list, otherwise on all rated songs. */
 export function openStats(): void {
@@ -48,6 +55,7 @@ export function openStats(): void {
 
 /** Back to where the screen was opened from, at the same scroll position. */
 export function closeStats(): void {
+    tip(null);
     if (from === 'work' && S.source) show('work'); else renderPicker();
     scrollTo(0, scrollWas);
 }
@@ -65,7 +73,18 @@ export function pickArtist(name: string): void {
     for (const b of $('#statsBody').querySelectorAll<HTMLElement>('.tm-cell')) b.setAttribute('aria-pressed', String(b.dataset.a === picked));
     const panel = $('#tmDetail');
     panel.innerHTML = picked && cur ? detailHtml(cur, picked) : '';
-    if (picked) panel.scrollIntoView({ block: 'nearest' });
+    // Just its heading, so on a phone the chosen tile (and its tooltip) stays in view.
+    if (picked) panel.querySelector('h3')?.scrollIntoView({ block: 'nearest' });
+}
+
+/** Switches the treemap between colours and photos, redrawing only the treemap. */
+export function setLook(v: string): void {
+    if ((v !== 'colours' && v !== 'photos') || (v === 'photos') === photoTiles) return;
+    photoTiles = v === 'photos';
+    LS.set(KEY.artistTiles, v);
+    for (const b of $('#statsBody').querySelectorAll('[data-look]')) b.setAttribute('aria-pressed', String((b as HTMLElement).dataset.look === v));
+    const box = document.getElementById('treemap');
+    if (box && cur) drawTreemap(box, cur.artists.slice(0, TREEMAP_MAX));
 }
 
 /** Re-ranks one top card (by its id), redrawing only that card. */
@@ -91,6 +110,7 @@ export async function renderStats(): Promise<void> {
     listBtn.title = S.source?.name ?? '';
     for (const b of $('#scope').querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.scope === scope));
     const body = $('#statsBody');
+    tip(null);
     let ids: string[];
     let details: Map<string, Track>;
     if (scope === 'list') {
@@ -193,7 +213,10 @@ function bodyHtml(s: Stats): string {
 
     return `<div class="st-tiles">${tiles}</div>
 ${card('Ratings', dist)}
-${card('Artists', `<p class="st-sub">Size is rated songs, colour is average rating. Choose an artist for their albums and songs.</p>${tm}`)}
+${s.artists.length ? `<section class="st-card"><div class="st-card-head"><h2>Artists</h2>
+<div class="seg" role="group" aria-label="Show artists as">${[['colours', 'Colours'], ['photos', 'Photos']].map(([v, l]) =>
+        `<button data-look="${v}" aria-pressed="${(v === 'photos') === photoTiles}">${l}</button>`).join('')}</div></div>
+<p class="st-sub">Size is rated songs, colour is average rating. Choose an artist for their albums and songs.</p>${tm}</section>` : card('Artists', `<p class="st-sub">Size is rated songs, colour is average rating. Choose an artist for their albums and songs.</p>${tm}`)}
 ${topCard('topArtists', 'Top artists', s.artists, s.avg, sts)}
 ${topCard('topAlbums', 'Top albums', s.albums, s.avg, sts)}
 <div class="st-pair">
@@ -213,17 +236,78 @@ function rankHtml(gs: Group[], by: RankBy, sts: string[]): string {
 }
 
 function drawTreemap(box: HTMLElement, artists: Group[]): void {
+    tip(null);
     const W = box.clientWidth, H = box.clientHeight;
     const sts = stops();
+    const songs = cur?.songs ?? [];
+    const ids = artistIdsByName(songs);
     // Laid out in pixels so rectangles come out near square, then placed in percent so a resize only stretches them.
     box.innerHTML = treemap(artists.map(a => a.n), W, H).map(({ i, x, y, w, h }) => {
         const a = artists[i];
         const rgb = ratingColor(sts, a.avg);
-        const label = `${a.name}: ${plural(a.n, 'rated song')}, average ${a.avg.toFixed(1)} stars`;
-        return `<button class="tm-cell" data-a="${esc(a.name)}" aria-pressed="false" aria-controls="tmDetail"
-title="${esc(label)}" aria-label="${esc(label)}"
-style="left:${(x / W) * 100}%;top:${(y / H) * 100}%;width:${(w / W) * 100}%;height:${(h / H) * 100}%;background:${fill(rgb)};color:${darkText(rgb) ? '#1D1A2C' : '#fff'}">${w >= 64 && h >= 38 ? `<b>${esc(a.name)}</b><span>${avgText(a.avg)}</span>` : ''}</button>`;
+        const c = artistCover(songs, a.name);
+        const id = ids.get(a.name) ?? '';
+        // Spotify's small cover is 64px, so larger tiles (in device pixels) take the big one.
+        const src = photoTiles ? photos[id] || (Math.max(w, h) * devicePixelRatio > 64 ? c.big : c.img) : '';
+        const l = tileLabel(w, h, a.avg);
+        const label = `${a.name}: ${plural(a.n, 'rated song')}, average ${a.avg.toFixed(1)} stars${c.album ? `, best album ${c.album}` : ''}`;
+        return `<button class="tm-cell${l && !l.name ? ' only' : ''}${src ? ' pic' : ''}" data-a="${esc(a.name)}" data-id="${esc(id)}" data-al="${esc(c.album)}"
+aria-pressed="${a.name === picked}" aria-controls="tmDetail" aria-label="${esc(label)}"
+style="left:${(x / W) * 100}%;top:${(y / H) * 100}%;width:${(w / W) * 100}%;height:${(h / H) * 100}%;--c:${fill(rgb)};--t:${darkText(rgb) ? '#1D1A2C' : '#fff'}${l ? `;font-size:${l.px}px` : ''}">${src ? `<img src="${esc(src)}" alt="" loading="lazy" decoding="async">` : ''}${l?.name ? `<b>${esc(a.name)}</b>` : ''}${l ? `<span>${l.text}</span>` : ''}</button>`;
     }).join('');
+    if (photoTiles) loadPhotos([...box.querySelectorAll<HTMLElement>('.tm-cell')].map(b => b.dataset.id ?? ''));
+}
+
+/** Asks Spotify for the photos of drawn artists not yet known, swapping each into its tile as it arrives. */
+function loadPhotos(ids: string[]): void {
+    const want = ids.filter(id => id && !(id in photos) && !asked.has(id));
+    if (!want.length) return;
+    for (const id of want) asked.add(id);
+    void getArtistImages(want, (id, url) => {
+        photos[id] = url;
+        LS.set(KEY.artistPhotos, photos);
+        if (!url || !photoTiles) return;
+        for (const b of document.querySelectorAll<HTMLElement>(`#treemap .tm-cell[data-id="${CSS.escape(id)}"]`)) {
+            const img = b.querySelector('img') ?? b.insertAdjacentElement('afterbegin', Object.assign(document.createElement('img'), { alt: '', decoding: 'async' }))!;
+            (img as HTMLImageElement).src = url;
+            b.classList.add('pic');
+        }
+    });
+}
+
+/* ---- The treemap's tooltip: one element on <body>, so the card's rounded overflow can't clip it ---- */
+
+let tipFor: HTMLElement | null = null;
+let tipTimer = 0;
+
+/** Shows the tooltip for a tile, or hides it (null). `brief` hides it again after a few seconds, for taps. */
+export function tip(cell: HTMLElement | null, brief = false): void {
+    clearTimeout(tipTimer);
+    let el = document.getElementById('tmTip');
+    const g = cell && cur?.artists.find(a => a.name === cell.dataset.a);
+    tipFor = g ? cell : null;
+    if (!g || !cell) { el?.classList.remove('on'); return; }
+    if (!el) {
+        el = Object.assign(document.createElement('div'), { id: 'tmTip', className: 'tm-tip' });
+        el.setAttribute('role', 'tooltip');
+        document.body.append(el);
+    }
+    el.innerHTML = `<b>${esc(g.name)}</b><span><i style="background:${cell.style.getPropertyValue('--c')}"></i>${avgText(g.avg)} · ${plural(g.n, 'rated song')}</span>${cell.dataset.al ? `<span>Best album: ${esc(cell.dataset.al)}</span>` : ''}`;
+    placeTip();
+    el.classList.add('on');
+    if (brief) tipTimer = window.setTimeout(() => tip(null), 4000);
+}
+
+/** Puts the tooltip above its tile (below when there's no room), inside the viewport; hides it once the tile scrolls away. */
+export function placeTip(): void {
+    const el = document.getElementById('tmTip');
+    if (!tipFor || !el) return;
+    const r = tipFor.getBoundingClientRect(), t = el.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth, vh = innerHeight;
+    if (!tipFor.isConnected || r.bottom < 0 || r.top > vh) return tip(null);
+    const x = Math.min(Math.max(8, r.left + r.width / 2 - t.width / 2), vw - t.width - 8);
+    const y = r.top - t.height - 6 >= 8 ? r.top - t.height - 6 : Math.min(r.bottom + 6, vh - t.height - 8);
+    el.style.transform = `translate(${Math.round(x)}px,${Math.round(y)}px)`;
 }
 
 function detailHtml(s: Stats, name: string): string {

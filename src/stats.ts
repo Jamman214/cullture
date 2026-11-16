@@ -189,3 +189,38 @@ export function darkText([r, g, b]: [number, number, number]): boolean {
     const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
     return (L + 0.05) / 0.06 > 1.05 / (L + 0.05); // 0.06 ≈ luminance of #1D1A2C plus 0.05
 }
+
+/**
+ * An artist's best album (highest average among their rated songs, ties to more songs) and
+ * artwork to stand in for the artist, who has no photo saved: that album's cover, else any of
+ * their songs' cover, else ''.
+ */
+export function artistCover(songs: Song[], name: string): { album: string; img: string; big: string } {
+    const d = artistDetail(songs, name);
+    const album = d.albums[0]?.name ?? '';
+    const art = (s: Song) => !!(s.t.img || s.t.big);
+    const t = (d.songs.find(s => s.t.album === album && art(s)) ?? d.songs.find(art))?.t;
+    return { album, img: t?.img || t?.big || '', big: t?.big || t?.img || '' };
+}
+
+/**
+ * What a w×h px treemap tile has room for: the name and rating at 13px; else only the rating,
+ * as large as fits up to 13px and no smaller than 8px, as "4.2★", then "4.2", then "4"; else null.
+ * The em widths are rough glyph widths plus the pill's padding.
+ */
+export function tileLabel(w: number, h: number, avg: number): { name: boolean; text: string; px: number } | null {
+    const a = avg.toFixed(1);
+    if (w >= 64 && h >= 38) return { name: true, text: `${a}★`, px: 13 };
+    for (const [text, em] of [[`${a}★`, 2.9], [a, 2], [String(Math.round(avg)), 1.1]] as const) {
+        const px = Math.floor(Math.min(13, (w - 2) / em, (h - 2) / 1.4));
+        if (px >= 8) return { name: false, text, px };
+    }
+    return null;
+}
+
+/** Spotify artist ID by artist name: a name seen with an ID on any song gets it (the first one seen). */
+export function artistIdsByName(songs: Song[]): Map<string, string> {
+    const m = new Map<string, string>();
+    for (const { t } of songs) t.artistIds?.forEach((id, k) => { const n = t.artistList?.[k]; if (id && n && !m.has(n)) m.set(n, id); });
+    return m;
+}

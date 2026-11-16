@@ -12,7 +12,7 @@ All runtime state lives in one object, `S`, exported from `state.ts`. Modules re
 | Playback | `pb` | The playback state: mode, current song, position and length. It only changes through `dispatch` in `player.ts`; see [playback.md](playback.md) |
 | Devices | `sdk`, `sdkDevice`, `deviceId`, `deviceName`, `pollTimer` | Browser player, chosen device, polling timer for remote devices |
 
-A `Track` is trimmed from Spotify's song object to `id`, `uri`, `name`, `artists`, `album`, two image URLs, `dur`, `added` and `idx` (its position in the playlist), plus `year` (the album's release year) and `artistList` (the artist names one by one, since `artists` joins them with ", " and names can contain commas). Songs saved before those two were added lack them, so code using them must cope; reloading a playlist from Spotify adds them. Local files, podcast episodes and duplicate songs are skipped when loading.
+A `Track` is trimmed from Spotify's song object to `id`, `uri`, `name`, `artists`, `album`, two image URLs, `dur`, `added` and `idx` (its position in the playlist), plus `year` (the album's release year), `artistList` (the artist names one by one, since `artists` joins them with ", " and names can contain commas) and `artistIds` (their Spotify IDs, in the same order; `''` where Spotify gave none). Songs saved before those three were added lack them, so code using them must cope; reloading a playlist from Spotify adds them. Local files, podcast episodes and duplicate songs are skipped when loading.
 
 Each rating entry is `{ r, t, p, inst, hid }`: the rating from 1 to 5, when it was rated, when the song was first played (both in milliseconds), and its tags. An entry is deleted once it has no rating, no play and no tags. A song counts as played if it has either.
 
@@ -28,6 +28,8 @@ Each rating entry is `{ r, t, p, inst, hid }`: the rating from 1 to 5, when it w
 | `culler:lastSource` | The playlist to reopen on next visit |
 | `culler:rankArtists` | How the stats screen ranks top artists: `weighted`, `avg` or `count` |
 | `culler:rankAlbums` | How the stats screen ranks top albums: `weighted`, `avg` or `count` |
+| `culler:artistTiles` | How the stats screen's artist treemap draws its tiles: `colours` or `photos` |
+| `culler:artistPhotos` | Artist photo URLs by Spotify artist ID, `''` for artists Spotify has no photo for, so each artist is asked for once. Kept in localStorage rather than IndexedDB: it's small (one URL per artist shown), read synchronously when the treemap draws, and losing it only costs a re-fetch |
 | `culler:prog:<id>` | Rated count and total per playlist, for the picker's progress bars |
 | `culler:cache:<id>` | When a playlist was saved, its Spotify version ID and song count |
 | `culler:verifier`, `culler:state` | Temporary sign-in values, deleted once sign-in finishes |

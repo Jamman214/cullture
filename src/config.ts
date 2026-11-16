@@ -34,6 +34,8 @@ export const KEY = {
     lastSource: P + 'lastSource',
     rankArtists: P + 'rankArtists',
     rankAlbums: P + 'rankAlbums',
+    artistTiles: P + 'artistTiles',
+    artistPhotos: P + 'artistPhotos',
     progress: (sourceId: string) => `${P}prog:${sourceId}`,
     cache: (sourceId: string) => `${P}cache:${sourceId}`
 } as const;

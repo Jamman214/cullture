@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { artistDetail, computeStats, darkText, mergeDetails, monthly, rank, ratingColor, treemap } from '../src/stats';
+import { artistCover, artistDetail, artistIdsByName, computeStats, darkText, mergeDetails, monthly, rank, ratingColor, tileLabel, treemap } from '../src/stats';
 import type { Ratings } from '../src/types';
 import { track } from './helpers';
 
@@ -107,6 +107,18 @@ describe('artistDetail', () => {
     });
 });
 
+describe('artistCover', () => { const songs = (...xs: [string, number, string][]) => computeStats(xs.map(x => x[0]), details(...xs.map(([id, , album]) => track(id, { artistList: ['K'], album, img: album === 'Bare' ? '' : `s-${id}`, big: album === 'Bare' ? '' : `b-${id}` }))), Object.fromEntries(xs.map(([id, r]) => [id, { r }]))).songs; it('uses the cover of the best album, ties to more songs', () => { const c = artistCover(songs(['a', 5, 'X'], ['b', 4, 'Y'], ['c', 5, 'Y'], ['d', 5, 'Z'], ['e', 5, 'Z']), 'K'); expect(c).toEqual({ album: 'Z', img: 's-d', big: 'b-d' }); }); it('falls back to any song with artwork, then to none', () => { expect(artistCover(songs(['a', 5, 'Bare'], ['b', 2, 'Y']), 'K')).toEqual({ album: 'Bare', img: 's-b', big: 'b-b' }); expect(artistCover(songs(['a', 5, 'Bare']), 'K')).toEqual({ album: 'Bare', img: '', big: '' }); }); });  describe('artistIdsByName', () => {
+    it('gives a name the ID it was seen with on any song, skipping songs saved without IDs', () => {
+        const s = computeStats(['a', 'b', 'c'], details(
+            track('a', { artistList: ['K', 'L'] }),
+            track('b', { artistList: ['K', 'L'], artistIds: ['k1', ''] }),
+            track('c', { artistList: ['L'], artistIds: ['l1'] })
+        ), { a: { r: 3 }, b: { r: 5 }, c: { r: 1 } });
+        expect([...artistIdsByName(s.songs)]).toEqual([['K', 'k1'], ['L', 'l1']]);
+    });
+});
+
+describe('tileLabel', () => { it('shows the name when it fits, else shrinks the rating, then drops the star, then the decimal', () => { expect(tileLabel(100, 50, 4.24)).toEqual({ name: true, text: '4.2★', px: 13 }); expect(tileLabel(40, 30, 4.24)).toEqual({ name: false, text: '4.2★', px: 13 }); expect(tileLabel(28, 30, 4.24)).toEqual({ name: false, text: '4.2★', px: 8 }); expect(tileLabel(20, 30, 4.24)).toEqual({ name: false, text: '4.2', px: 9 }); expect(tileLabel(12, 30, 4.6)).toEqual({ name: false, text: '5', px: 9 }); expect(tileLabel(60, 10, 4.6)).toBeNull(); }); }); 
 describe('treemap', () => {
     const W = 800, H = 450;
     const cases = [[1], [5, 3, 1], [6, 6, 4, 3, 2, 2, 1], Array.from({ length: 60 }, (_, i) => 1 + ((i * 37) % 23)), [1, 1, 1, 1]];

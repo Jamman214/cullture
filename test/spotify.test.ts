@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/api', async importOriginal => ({ ...(await importOriginal<typeof import('../src/api')>()), api: vi.fn() }));
-import { api } from '../src/api';
-import { getSources, getTracks } from '../src/spotify';
+import { SpotifyError, api } from '../src/api';
+import { getArtistImages, getSources, getTracks, pickImage } from '../src/spotify';
 import type { Source, SpotifyTrack } from '../src/types';
 
 const song = (id: string | null, over: Partial<SpotifyTrack> = {}): SpotifyTrack => ({
@@ -40,7 +40,7 @@ describe('getTracks', () => {
             }
         });
         const [a, b] = await getTracks(playlist);
-        expect(a).toMatchObject({ artistList: ['A', 'B'], year: 1971 });
+        expect(a).toMatchObject({ artistList: ['A', 'B'], artistIds: ['', ''], year: 1971 });
         expect('year' in b).toBe(false);
     });
     it('skips local files, podcast episodes, empty slots and duplicates', async () => {
@@ -119,5 +119,42 @@ describe('getSources', () => {
             throw new Error('nope');
         });
         expect((await getSources(me))[0].total).toBeNull();
+    });
+});
+
+describe('artist photos', () => {
+    it('picks the smallest image at least 300px wide, else the largest', () => {
+        const im = (width: number) => ({ url: `u${width}`, width });
+        expect(pickImage([im(640), im(320), im(160)])).toBe('u320');
+        expect(pickImage([im(64), im(160)])).toBe('u160');
+        expect(pickImage([])).toBe('');
+        expect(pickImage(undefined)).toBe('');
+    });
+    it('asks in one batch', async () => {
+        pages({ '/artists': { artists: [{ id: 'x', images: [{ url: 'px', width: 300 }] }, null] } });
+        const got: [string, string][] = [];
+        await getArtistImages(['x', 'y'], (id, url) => got.push([id, url]));
+        expect(got).toEqual([['x', 'px'], ['y', '']]);
+        expect(vi.mocked(api)).toHaveBeenCalledWith('/artists', { query: { ids: 'x,y' } });
+    });
+    it('falls back to one artist at a time when the batch is refused, stopping quietly at the first failure', async () => {
+        const asked: string[] = [];
+        vi.mocked(api).mockImplementation(async (path: string) => {
+            asked.push(path);
+            if (path === '/artists') throw new SpotifyError('Forbidden', 403);
+            if (path === '/artists/c') throw new SpotifyError('Not found', 404);
+            return { id: path, images: [{ url: 'p' + path.slice(-1), width: 300 }] } as never;
+        });
+        const got: [string, string][] = [];
+        await getArtistImages(['a', 'b', 'c', 'd'], (id, url) => got.push([id, url]));
+        expect(got).toEqual([['a', 'pa'], ['b', 'pb']]);
+        expect(asked).toEqual(['/artists', '/artists/a', '/artists/b', '/artists/c']);
+    });
+    it('gives up without falling back on other errors', async () => {
+        vi.mocked(api).mockRejectedValue(new SpotifyError('Server error', 500));
+        const got = vi.fn();
+        await getArtistImages(['a'], got);
+        expect(got).not.toHaveBeenCalled();
+        expect(vi.mocked(api)).toHaveBeenCalledTimes(1);
     });
 });

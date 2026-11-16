@@ -1886,6 +1886,9 @@ dialog .row-actions {
     overflow: hidden;
     font-size: 13px;
     line-height: 1.2;
+    background: var(--c);
+    color: var(--t);
+    isolation: isolate;
     transition: filter .15s
 }
 
@@ -1896,8 +1899,124 @@ dialog .row-actions {
     white-space: nowrap
 }
 
+.tm-cell span {
+    white-space: nowrap
+}
+
+/* Only the rating fits: centred, sized by drawTreemap */
+.tm-cell.only {
+    padding: 0;
+    align-items: center;
+    justify-content: center
+}
+
 .tm-cell:hover {
-    filter: brightness(1.08)
+    filter: brightness(1.1)
+}
+
+.tm-cell:active {
+    filter: brightness(.92)
+}
+
+/* Photos: the picture under a scrim darkest at the top left, where the text sits */
+.tm-cell img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: -1
+}
+
+.tm-cell.pic::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(160deg, rgb(0 0 0 / .72), rgb(0 0 0 / .35) 45%, rgb(0 0 0 / .08))
+}
+
+.tm-cell.pic.only::after {
+    background: rgb(0 0 0 / .3)
+}
+
+.tm-cell.pic b,
+.tm-cell.pic span {
+    color: #fff;
+    text-shadow: 0 1px 2px rgb(0 0 0 / .8)
+}
+
+/* The rating keeps its colour as a pill */
+.tm-cell.pic span {
+    margin-top: 2px;
+    padding: .05em .35em;
+    border-radius: 999px;
+    background: var(--c);
+    color: var(--t);
+    text-shadow: none;
+    font-weight: 700
+}
+
+.tm-cell.pic.only span {
+    margin: 0
+}
+
+/* The selected ring over the picture */
+.tm-cell.pic[aria-pressed="true"]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    box-shadow: inset 0 0 0 3px #fff, inset 0 0 0 5px rgb(0 0 0 / .55)
+}
+
+.tm-tip {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 50;
+    max-width: min(280px, calc(100vw - 16px));
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--ink);
+    color: var(--surface);
+    box-shadow: 0 4px 16px rgb(0 0 0 / .25);
+    font-size: 13px;
+    line-height: 1.35;
+    display: flex;
+    flex-direction: column;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .12s, visibility .12s
+}
+
+.tm-tip.on {
+    opacity: 1;
+    visibility: visible
+}
+
+.tm-tip b {
+    font-size: 14px
+}
+
+.tm-tip span {
+    opacity: .85
+}
+
+.tm-tip i {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    margin-right: 6px;
+    box-shadow: 0 0 0 1px rgb(255 255 255 / .5)
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tm-tip {
+        transition: none
+    }
 }
 
 .tm-cell:focus-visible {

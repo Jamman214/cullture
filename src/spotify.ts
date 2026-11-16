@@ -2,11 +2,39 @@
 import { api, statusOf } from './api';
 import { LIKED_BATCH, PAGE, WRITE_BATCH } from './config';
 import type {
-    Paging, Source, SpotifyListItem, SpotifyPlaylist, SpotifyUser, Track
+    Paging, Source, SpotifyArtist, SpotifyImage, SpotifyListItem, SpotifyPlaylist, SpotifyUser, Track
 } from './types';
 import { chunk } from './util';
 
 export const getMe = () => api<SpotifyUser>('/me');
+
+/** The smallest image at least `min` px wide (sharp on a large treemap tile), else the largest; '' when there are none. */
+export function pickImage(imgs: SpotifyImage[] | undefined, min = 300): string {
+    const s = [...(imgs || [])].sort((a, b) => (a.width ?? 0) - (b.width ?? 0));
+    return (s.find(i => (i.width ?? 0) >= min) ?? s[s.length - 1])?.url ?? '';
+}
+
+/**
+ * Artist photos: calls `got(id, url)` for each artist as it arrives ('' when Spotify has none).
+ * Tries the batch endpoint; if Spotify refuses it (Development Mode apps may be), asks one artist
+ * at a time, in turn, and stops quietly at the first failure. Never throws.
+ */
+export async function getArtistImages(ids: string[], got: (id: string, url: string) => void): Promise<void> {
+    let done = 0;
+    try {
+        for (const part of chunk(ids, 50)) {
+            const r = await api<{ artists?: (SpotifyArtist | null)[] }>('/artists', { query: { ids: part.join(',') } });
+            part.forEach((id, k) => got(id, pickImage(r?.artists?.[k]?.images)));
+            done += part.length;
+        }
+        return;
+    } catch (e) {
+        if (![400, 403, 404, 405].includes(statusOf(e) ?? 0)) return;
+    }
+    for (const id of ids.slice(done)) {
+        try { got(id, pickImage((await api<SpotifyArtist>(`/artists/${encodeURIComponent(id)}`))?.images)); } catch { return; }
+    }
+}
 
 export async function getSources(me: SpotifyUser): Promise<Source[]> {
     const lists: SpotifyPlaylist[] = [];
@@ -58,6 +86,7 @@ export async function getTracks(src: Source, onProgress?: (loaded: number, total
                 id: t.id, uri: t.uri, name: t.name,
                 artists: names.join(', '),
                 artistList: names,
+                artistIds: (t.artists || []).map(a => a.id || ''),
                 ...(year ? { year } : {}),
                 album: t.album?.name || '',
                 img: (imgs[imgs.length - 1] || imgs[0])?.url || '',

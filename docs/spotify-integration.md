@@ -33,6 +33,7 @@ It gives up after six attempts in total.
 | Remove from Liked Songs | `DELETE /me/library`, falling back to `DELETE /me/tracks` | spotify.ts |
 | Create playlist | `POST /me/playlists`, falling back to `POST /users/{id}/playlists` | spotify.ts |
 | Add to playlist | `POST /playlists/{id}/items` | spotify.ts |
+| Artist photos (stats treemap) | `GET /artists?ids=…` (up to 50), falling back to `GET /artists/{id}` one at a time | spotify.ts |
 | Devices | `GET /me/player/devices` | spotify.ts |
 | Play, pause, seek | `PUT /me/player/play`, `/pause`, `/seek` | player.ts |
 | Remote playback state | `GET /me/player` | player.ts |
@@ -47,6 +48,7 @@ Spotify changed the Web API for apps in Development Mode in February 2026, and t
 - Only playlists you own or collaborate on return their songs. Others show greyed out on the picker.
 - Library removal moved to `/me/library`. The fallbacks keep older endpoints working if the new ones fail.
 - Per-request limits were lowered, hence the small write batches.
+- Batch lookups such as `GET /artists?ids=` may be refused. Artist photos try the batch, and on a 400, 403, 404 or 405 ask for one artist at a time, in turn, stopping quietly at the first failure; tiles then keep the album cover. Only the mock server's version of these endpoints has been exercised.
 
 ## Relinking
 

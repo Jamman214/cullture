@@ -28,6 +28,20 @@ const relinks = new Map<string, SpotifyTrack>();
     relinks.set(asked.uri, copy);
 }
 
+/** Artists by ID; every fifth has no photo, so tiles fall back to an album cover. */
+const artistsById = new Map(lib.tracks.flatMap(t => t.artists ?? []).map(a => [a.id!, a.name]));
+function artistObj(id: string) {
+    const name = artistsById.get(id);
+    if (name == null) return null;
+    const n = parseInt(id.slice(-4), 36);
+    if (n % 5 === 4) return { id, name, images: [] };
+    // A portrait silhouette on a two-tone gradient: plainly not one of the flat album covers.
+    const hue = (n * 47) % 360;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue},80%,70%)"/><stop offset="1" stop-color="hsl(${(hue + 60) % 360},70%,35%)"/></linearGradient></defs><rect width="64" height="64" fill="url(#g)"/><circle cx="32" cy="25" r="11" fill="#1a1a1a" opacity=".8"/><path d="M10 64c2-16 12-22 22-22s20 6 22 22z" fill="#1a1a1a" opacity=".8"/></svg>`;
+    const url = 'data:image/svg+xml,' + encodeURIComponent(svg);
+    return { id, name, images: [{ url, width: 640, height: 640 }, { url, width: 300, height: 300 }, { url, width: 64, height: 64 }] };
+}
+
 /** Playlist version IDs, bumped on every edit like Spotify's snapshot_id. */
 const revs = new Map<string, number>();
 const snapshotOf = (p: MockPlaylist) => `${p.id}-${revs.get(p.id) ?? 0}`;
@@ -118,6 +132,10 @@ export async function mockFetch(method: string, rawUrl: string, payload?: string
         lib.playlists.unshift(p);
         return json(201, playlistObj(p));
     }
+
+    if (route === 'GET /artists') return json(200, { artists: (url.searchParams.get('ids') ?? '').split(',').slice(0, 50).map(artistObj) });
+    const artist = route.match(/^GET \/artists\/([^/]+)$/);
+    if (artist) { const a = artistObj(decodeURIComponent(artist[1])); return a ? json(200, a) : fail(404, 'Not found'); }
 
     const one = route.match(/^GET \/playlists\/([^/]+)$/);
     if (one) {

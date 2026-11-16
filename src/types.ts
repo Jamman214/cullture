@@ -15,6 +15,8 @@ export interface Track {
     /** Release year of the album, and the artist names one by one. Missing from songs saved before they were added. */
     year?: number;
     artistList?: string[];
+    /** Spotify artist IDs, parallel to artistList; missing from songs saved before they were added. */
+    artistIds?: string[];
 }
 
 /** A playlist or Liked Songs, as shown on the picker screen. */
@@ -85,6 +87,7 @@ export interface Paging<T> {
     total: number;
 }
 export interface SpotifyImage { url: string; width?: number | null; height?: number | null }
+export interface SpotifyArtist { id: string; images?: SpotifyImage[] }
 export interface SpotifyTrack {
     id: string | null;
     /** Set when Spotify played a different copy of the song than the one asked for (relinking). */
@@ -94,7 +97,7 @@ export interface SpotifyTrack {
     type?: string;
     is_local?: boolean;
     duration_ms: number;
-    artists?: { name: string }[];
+    artists?: { name: string; id?: string }[];
     album?: { name: string; images?: SpotifyImage[]; release_date?: string };
 }
 /** Playlist items use `item` since Feb 2026; Liked Songs and older responses use `track`. */
