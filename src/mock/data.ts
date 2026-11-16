@@ -67,10 +67,13 @@ export function buildLibrary(): MockLibrary {
 
     const artists = Array.from({ length: 40 }, () =>
         r() < 0.45 ? `The ${pick(ADJ)} ${pick(NOUN)}` : `${pick(FIRST)} ${pick(LAST)}`);
+    const ry = seeded(1971); // its own generator, so adding years left every other song detail unchanged
     const albums = Array.from({ length: 160 }, () => ({
         name: r() < 0.8 ? `${pick(ADJ)} ${pick(NOUN)}` : `${pick(NOUN)}, Vol. ${1 + Math.floor(r() * 3)}`,
         artist: pick(artists),
-        image: cover(Math.floor(r() * 360), Math.floor(r() * 3))
+        image: cover(Math.floor(r() * 360), Math.floor(r() * 3)),
+        // Most from recent decades, some back to the 1960s; some only give the year, as Spotify does for old albums.
+        date: String(2025 - Math.floor(ry() ** 1.6 * 62)) + (ry() < 0.8 ? '-05-14' : '')
     }));
 
     const tracks: SpotifyTrack[] = Array.from({ length: 900 }, (_, i) => {
@@ -82,7 +85,7 @@ export function buildLibrary(): MockLibrary {
             id, uri: `spotify:track:${id}`, name, type: 'track',
             duration_ms: Math.round(120000 + r() * 210000),
             artists: [...new Set(names)].map(n => ({ name: n })),
-            album: { name: album.name, images: [{ url: album.image, width: 64, height: 64 }] }
+            album: { name: album.name, images: [{ url: album.image, width: 64, height: 64 }], release_date: album.date }
         };
     });
 

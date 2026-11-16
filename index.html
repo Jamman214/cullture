@@ -26,6 +26,14 @@
                 stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                 <path d="M4 6h16M4 12h16M4 18h10" />
             </svg><span class="label">Change playlist</span></button>
+        <button class="btn" id="statsBack" hidden aria-label="Back"><svg viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M15 5l-7 7 7 7" />
+            </svg><span class="label">Back</span></button>
+        <button class="btn" id="statsBtn" hidden aria-label="Stats"><svg viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <path d="M5 20V11M12 20V4M19 20v-6" />
+            </svg><span class="label">Stats</span></button>
         <div class="spacer"></div>
         <button class="btn danger" id="cullBtn" hidden>Cull…</button>
         <div class="menu-wrap" id="menuWrap" hidden>
@@ -168,6 +176,17 @@
                     class="n">#</span><span></span><span>Title</span><span class="al">Album</span><span class="pl-h"
                     title="Played">▸</span><span class="du">Time</span><span>Rating</span><span></span></div>
             <div id="list"></div>
+        </section>
+
+        <section id="stats" hidden>
+            <div class="st-head">
+                <h1>Your ratings</h1>
+                <div class="seg" id="scope" role="group" aria-label="Which songs">
+                    <button data-scope="all" aria-pressed="true">All rated songs</button><button data-scope="list"
+                        id="scopeList" aria-pressed="false">This playlist</button>
+                </div>
+            </div>
+            <div id="statsBody"></div>
         </section>
     </main>
 

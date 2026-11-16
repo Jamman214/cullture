@@ -22,6 +22,7 @@ The stack is plain TypeScript and CSS, with no UI framework, bundled by Vite. Th
 | [spotify-integration.md](docs/spotify-integration.md) | Sign-in, the API client, endpoints, February 2026 API changes |
 | [playback.md](docs/playback.md) | Browser and remote playback, play order, staying in sync |
 | [ui-and-rendering.md](docs/ui-and-rendering.md) | Screens, static and generated HTML, rendering strategy |
+| [dashboard.md](docs/dashboard.md) | The stats screen: what it shows and where its data comes from |
 | [user-flows.md](docs/user-flows.md) | Start-up, rating, group rating, culling, keepers, backup |
 | [visual-design.md](docs/visual-design.md) | Colour tokens, typography, layout, small screens, accessibility |
 | [keyboard-shortcuts.md](docs/keyboard-shortcuts.md) | Every shortcut and when they apply |

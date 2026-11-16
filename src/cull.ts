@@ -1,7 +1,7 @@
 /** The Cull dialog (remove low-rated songs, save keepers), confirmations, and ratings backup. */
 import { messageOf } from './api';
 import { KEY } from './config';
-import { saveCached } from './cache';
+import { saveCached, saveRemoved } from './cache';
 import { TAGS } from './tags';
 import { renderList } from './list';
 import { renderDeck } from './player';
@@ -88,7 +88,8 @@ export async function removeTracks(ids: string[]): Promise<void> {
     );
     if (!ok) return;
 
-    const uris = ids.map(id => S.byId.get(id)?.uri).filter((u): u is string => !!u);
+    const songs = ids.map(id => S.byId.get(id)).filter(t => !!t);
+    const uris = songs.map(t => t.uri);
     const gone = new Set<string>();
     toast(`Removing ${plural(uris.length, 'song')}…`);
     try {
@@ -100,6 +101,7 @@ export async function removeTracks(ids: string[]): Promise<void> {
         toast(`Stopped after removing ${gone.size} of ${uris.length}: ${messageOf(e)}`);
     }
     if (src.total != null) src.total = Math.max(0, src.total - gone.size);
+    void saveRemoved(songs.filter(t => gone.has(t.uri)));
     if (S.source === src) {
         setTracks(S.tracks.filter(t => !gone.has(t.uri)));
         // Keep the saved copy in step, so it isn't flagged as changed on Spotify next time.

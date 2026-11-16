@@ -40,7 +40,9 @@ One typeface, Bricolage Grotesque from Google Fonts, with a system sans-serif fa
 
 ## Small screens
 
-Below 820 px wide, rows drop to five columns (checkbox, cover, title, stars, play), hiding number, album, played dot and length. The player bar stacks into rows with larger 44 px stars for touch. Below 600 px the selection bar splits into two rows (what's selected, then stars and actions), shortens Clear rating to Clear, and shows Remove as a bin icon. The top bar shows Change playlist as an icon, and below 420 px hides the test-mode badge, so every button stays on screen.
+Below 820 px wide, rows drop to five columns (checkbox, cover, title, stars, play), hiding number, album, played dot and length. The player bar stacks into rows with larger 44 px stars for touch. Below 600 px the selection bar splits into two rows (what's selected, then stars and actions), shortens Clear rating to Clear, and shows Remove as a bin icon. The top bar shows Change playlist and Stats as icons, and below 420 px hides the test-mode badge, so every button stays on screen.
+
+On the stats screen, paired lists and charts stack into one column below 820 px, and below 480 px the tiles go two to a row and the ranked lists drop their small bars.
 
 ## Motion and accessibility
 

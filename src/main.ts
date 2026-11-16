@@ -2,6 +2,7 @@ import './styles.css';
 import { messageOf } from './api';
 import { SignedOutError, getClientId, handleRedirect, hasToken, login, setClientId, signOut } from './auth';
 import { BUILT_IN_ID, KEY, MOCK, REDIRECT } from './config';
+import { closeStats, openStats, pickArtist, renderStats, setRankBy, setScope } from './dashboard';
 import { exportRatings, importRatings, openCull, refreshCull, removeTracks, reviewCull, cullIds, saveKeepers } from './cull';
 import { clickSelect, renderBulk, renderList, renderSummary, reshuffle, resumeTarget, showMore, syncSelDom, toggleSel, updateBarSpace, updateRow } from './list';
 import {
@@ -60,6 +61,24 @@ function bindSetup(): void {
     };
     $('#switchBtn').onclick = renderPicker;
     $('#cullBtn').onclick = openCull;
+}
+
+function bindStats(): void {
+    $('#statsBtn').onclick = openStats;
+    $('#statsBack').onclick = closeStats;
+    $('#scope').onclick = e => {
+        const s = closest(e, 'button')?.dataset.scope;
+        if (s === 'all' || s === 'list') setScope(s);
+    };
+    // A button, so Enter and Space open an artist too.
+    $('#statsBody').onclick = e => {
+        const a = closest(e, '.tm-cell')?.dataset.a;
+        if (a != null) pickArtist(a);
+        const r = closest(e, '[data-rank]');
+        if (r) setRankBy(r.closest('.st-card')?.id ?? '', r.dataset.rank ?? '');
+    };
+    // Treemap colours and text are worked out from the theme's rating colours, so redraw when it changes.
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (!$('#stats').hidden) void renderStats(); });
 }
 
 function bindMenu(): void {
@@ -288,7 +307,7 @@ async function loadSources(): Promise<void> {
 }
 
 async function init(): Promise<void> {
-    bindSetup(); bindMenu(); bindFilters(); bindList(); bindBulk(); bindDeck(); bindDialogs(); bindKeys();
+    bindSetup(); bindMenu(); bindFilters(); bindList(); bindBulk(); bindDeck(); bindDialogs(); bindStats(); bindKeys();
     addEventListener('beforeunload', flushRatings);
     // Phones don't send beforeunload; they freeze the page, and may close it, once it's hidden.
     addEventListener('pagehide', flushRatings);
@@ -298,6 +317,7 @@ async function init(): Promise<void> {
         if (e.key !== KEY.ratings) return;
         reloadRatings();
         if (S.source) { renderList(); renderDeck(); }
+        if (!$('#stats').hidden) void renderStats();
     });
 
     try { await handleRedirect(); } catch (e) { toast(messageOf(e)); }

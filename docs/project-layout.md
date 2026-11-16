@@ -1,6 +1,6 @@
 # Project layout
 
-Each module owns one concern. Spotify network code sits in three files, and only `list.ts`, `player.ts`, `views.ts` and `cull.ts` render the page's content.
+Each module owns one concern. Spotify network code sits in three files, and only `list.ts`, `player.ts`, `views.ts`, `cull.ts` and `dashboard.ts` render the page's content.
 
 | File | Owns | Main exports |
 | --- | --- | --- |
@@ -19,9 +19,11 @@ Each module owns one concern. Spotify network code sits in three files, and only
 | `src/playback.ts` | The playback state machine: every rule about what playback does next | `transition`, `Playback` |
 | `src/player.ts` | Runs the state machine, talks to Spotify's player, draws the player bar, device dialog | `dispatch`, `playSong`, `togglePlay`, `rateCurrent` |
 | `src/beeper.ts` | The reminder beep for **Wait for a rating** | `setBeeping`, `primeBeeper` |
-| `src/cache.ts` | Saved copies of playlists' songs | `loadCached`, `saveCached`, `isStale` |
+| `src/cache.ts` | Saved copies of playlists' songs, and of culled songs | `loadCached`, `saveCached`, `loadAllCached`, `saveRemoved` |
 | `src/tags.ts` | Song tags (instrumental, hidden): names, keys and icons | `TAGS`, `tagsHtml` |
 | `src/views.ts` | Switching screens, setup screen, playlist picker, opening a playlist | `show`, `renderPicker`, `openSource` |
+| `src/stats.ts` | Rating statistics, treemap layout and rating colour scale: pure functions | `computeStats`, `treemap`, `artistDetail` |
+| `src/dashboard.ts` | The stats screen: loading its data, drawing it, scope switch, artist details | `openStats`, `closeStats`, `renderStats` |
 | `src/cull.ts` | Cull dialog, confirm dialog, keepers playlist, ratings export and import | `openCull`, `removeTracks`, `exportRatings` |
 | `src/mock/data.ts` | The test library for test mode: songs, playlists, covers | `buildLibrary` |
 | `src/mock/server.ts` | Simulated Spotify Web API and playback for test mode | `mockFetch` |
@@ -39,6 +41,8 @@ flowchart TD
 
     subgraph features["Screens and features"]
         views["views.ts<br/>Screens, picker, opening"]
+        dashboard["dashboard.ts<br/>Stats screen"]
+        dashboard --> views
         cull["cull.ts<br/>Cull dialog, export, import"]
         player["player.ts<br/>Playback and player bar"]
         list["list.ts<br/>Songs, filters, selection"]
@@ -64,6 +68,7 @@ flowchart TD
         beeper["beeper.ts<br/>Reminder beep"]
         cache["cache.ts<br/>Saved playlists"]
         tags["tags.ts<br/>Song tags"]
+        stats["stats.ts<br/>Rating statistics"]
     end
 
     main --> features
@@ -73,6 +78,6 @@ flowchart TD
 
 `main.ts` imports from every other module. Within the features layer, `views.ts` and `cull.ts` use `player.ts` and `list.ts`, and `player.ts` uses `list.ts`; `list.ts` imports nothing from Spotify. `player.ts` and `views.ts` also import from `api.ts` and `auth.ts` directly: `player.ts` for playback requests and the browser player's token, `views.ts` for error messages and the saved Client ID. `cull.ts` uses `api.ts`'s error helpers too.
 
-`playback.ts` imports nothing at all: it's pure logic that `player.ts` runs.
+`playback.ts` imports nothing at all: it's pure logic that `player.ts` runs. `stats.ts` is pure the same way (it reads only `tags.ts`), and `dashboard.ts` draws what it returns.
 
 To keep it this way, lower modules report back rather than reach up. For example, `markPlayed` in `state.ts` returns whether a song is newly played, and the caller decides what to redraw.

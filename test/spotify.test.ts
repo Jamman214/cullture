@@ -33,6 +33,16 @@ describe('getTracks', () => {
         const [t] = await getTracks(playlist);
         expect(t).toMatchObject({ name: 'Song a', artists: 'A, B', album: 'Al', big: 'big', img: 'small', dur: 180_000, added: '2025-02-02' });
     });
+    it('keeps the artists one by one and the release year, when Spotify gives one', async () => {
+        pages({
+            '/playlists/p1/items?limit=50': {
+                items: [{ item: song('a', { album: { name: 'Al', release_date: '1971-11-08' } }) }, { item: song('b') }], next: null, total: 2
+            }
+        });
+        const [a, b] = await getTracks(playlist);
+        expect(a).toMatchObject({ artistList: ['A', 'B'], year: 1971 });
+        expect('year' in b).toBe(false);
+    });
     it('skips local files, podcast episodes, empty slots and duplicates', async () => {
         pages({
             '/playlists/p1/items?limit=50': {

@@ -12,7 +12,7 @@ All runtime state lives in one object, `S`, exported from `state.ts`. Modules re
 | Playback | `pb` | The playback state: mode, current song, position and length. It only changes through `dispatch` in `player.ts`; see [playback.md](playback.md) |
 | Devices | `sdk`, `sdkDevice`, `deviceId`, `deviceName`, `pollTimer` | Browser player, chosen device, polling timer for remote devices |
 
-A `Track` is trimmed from Spotify's song object to `id`, `uri`, `name`, `artists`, `album`, two image URLs, `dur`, `added` and `idx` (its position in the playlist). Local files, podcast episodes and duplicate songs are skipped when loading.
+A `Track` is trimmed from Spotify's song object to `id`, `uri`, `name`, `artists`, `album`, two image URLs, `dur`, `added` and `idx` (its position in the playlist), plus `year` (the album's release year) and `artistList` (the artist names one by one, since `artists` joins them with ", " and names can contain commas). Songs saved before those two were added lack them, so code using them must cope; reloading a playlist from Spotify adds them. Local files, podcast episodes and duplicate songs are skipped when loading.
 
 Each rating entry is `{ r, t, p, inst, hid }`: the rating from 1 to 5, when it was rated, when the song was first played (both in milliseconds), and its tags. An entry is deleted once it has no rating, no play and no tags. A song counts as played if it has either.
 
@@ -26,6 +26,8 @@ Each rating entry is `{ r, t, p, inst, hid }`: the rating from 1 to 5, when it w
 | `culler:clientId` | Your Spotify app's Client ID |
 | `culler:device`, `culler:sdkDevice` | Last chosen playback device and the browser player's ID |
 | `culler:lastSource` | The playlist to reopen on next visit |
+| `culler:rankArtists` | How the stats screen ranks top artists: `weighted`, `avg` or `count` |
+| `culler:rankAlbums` | How the stats screen ranks top albums: `weighted`, `avg` or `count` |
 | `culler:prog:<id>` | Rated count and total per playlist, for the picker's progress bars |
 | `culler:cache:<id>` | When a playlist was saved, its Spotify version ID and song count |
 | `culler:verifier`, `culler:state` | Temporary sign-in values, deleted once sign-in finishes |
@@ -35,3 +37,5 @@ The keys keep the `culler:` prefix from before the rename, so data saved by earl
 ## Saved songs in IndexedDB
 
 Each playlist's songs are saved in an IndexedDB database called `cullture` (`cullture-mock` in test mode), so opening a playlist again doesn't download it. `cache.ts` reads and writes it, and the `culler:cache:<id>` entries above say what's saved and when.
+
+One record isn't a playlist: `removed` holds the songs removed by culling (`saveRemoved`), so the stats screen still knows their details after they leave the playlist's copy. It has no `culler:cache:` entry, so `loadCached` never returns it and nothing opens it; only `loadAllCached`, which reads every record for the stats screen, includes it.

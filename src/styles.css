@@ -563,8 +563,8 @@ h1 {
 }
 
 .seg button[aria-pressed="true"] {
-    background: var(--ink);
-    color: var(--bg)
+    background: color-mix(in srgb, var(--ink) 20%, var(--surface));
+    color: var(--ink)
 }
 
 /* Status and rating filters: one scrolling row on narrow screens, part of the wrap otherwise */
@@ -1419,13 +1419,17 @@ dialog .row-actions {
 }
 
 /* Top bar on narrow screens: keep everything on screen */
-#switchBtn {
+#switchBtn,
+#statsBtn,
+#statsBack {
     display: inline-flex;
     align-items: center;
     gap: 6px
 }
 
-#switchBtn svg {
+#switchBtn svg,
+#statsBtn svg,
+#statsBack svg {
     width: 16px;
     height: 16px
 }
@@ -1441,11 +1445,14 @@ dialog .row-actions {
         margin-right: 0
     }
 
-    #switchBtn {
+    #switchBtn,
+    #statsBtn,
+    #statsBack {
         padding: 7px 10px
     }
 
-    #switchBtn .label {
+    #switchBtn .label,
+    #statsBtn .label {
         display: none
     }
 }
@@ -1652,3 +1659,412 @@ dialog .row-actions {
 
 #reverse svg { transition: transform .15s }
 #reverse[aria-pressed="true"] svg { transform: rotate(180deg) }
+
+/* Stats screen */
+.st-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 16px;
+    margin-bottom: 18px
+}
+
+.st-head h1 {
+    margin: 0
+}
+
+.st-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 14px;
+    margin-bottom: 14px
+}
+
+.st-tile,
+.st-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px 16px
+}
+
+.st-tile b {
+    display: block;
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums
+}
+
+.st-tile span,
+.st-sub,
+.st-note,
+.st-val small,
+.st-rank small,
+.tm-detail small {
+    color: var(--muted);
+    font-size: 13px
+}
+
+.st-card {
+    margin-bottom: 14px;
+    min-width: 0
+}
+
+.st-card h2 {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -.01em;
+    margin: 0 0 10px
+}
+
+.st-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+    margin-bottom: 10px
+}
+
+.st-card-head h2 {
+    margin: 0
+}
+
+.st-card-head .seg button {
+    font-size: 13px;
+    padding: 4px 10px;
+    white-space: nowrap
+}
+
+.tm-detail h4 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    margin: 0 0 6px
+}
+
+.st-sub {
+    margin: -6px 0 12px
+}
+
+.st-note {
+    margin: 10px 0 0
+}
+
+/* A labelled horizontal bar: rating distribution and decades */
+.st-dist {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr) 96px;
+    align-items: center;
+    gap: 10px;
+    padding: 3px 0
+}
+
+.st-lbl {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums
+}
+
+.st-track {
+    display: block;
+    height: 12px;
+    border-radius: 6px;
+    background: var(--surface2);
+    overflow: hidden
+}
+
+.st-track i {
+    display: block;
+    height: 100%;
+    border-radius: 6px;
+    transition: width .3s ease
+}
+
+.st-val {
+    text-align: right;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap
+}
+
+.st-val small {
+    font-weight: 400
+}
+
+/* Two side by side (an artist's details; decade and activity cards); stacked on narrow screens */
+.st-cols,
+.st-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 28px
+}
+
+.st-pair {
+    gap: 0 14px
+}
+
+.st-rank {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    counter-reset: rank
+}
+
+.st-rank li {
+    counter-increment: rank;
+    display: grid;
+    /* a fixed value column keeps the bars lined up row to row */
+    grid-template-columns: 20px minmax(0, 1fr) 70px 108px;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 0;
+    border-top: 1px solid var(--line)
+}
+
+.st-rank li:first-child {
+    border-top: 0
+}
+
+/* A top 10 reads down the left column, then the right */
+@media (min-width: 821px) {
+    .st-rank {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        grid-template-rows: repeat(5, auto);
+        grid-auto-flow: column;
+        column-gap: 28px
+    }
+
+    .st-rank li:nth-child(6) {
+        border-top: 0
+    }
+}
+
+.st-rank li::before {
+    content: counter(rank);
+    color: var(--muted);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums
+}
+
+.st-name,
+.tm-list li>span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+
+.st-name small,
+.tm-list small {
+    margin-left: 6px
+}
+
+.st-rank .st-track {
+    height: 8px
+}
+
+/* Artist treemap: rectangles placed in percent by drawTreemap */
+.treemap {
+    position: relative;
+    height: 440px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--surface2)
+}
+
+.tm-cell {
+    position: absolute;
+    border: 1px solid var(--surface);
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    text-align: left;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 1.2;
+    transition: filter .15s
+}
+
+.tm-cell b {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+
+.tm-cell:hover {
+    filter: brightness(1.08)
+}
+
+.tm-cell:focus-visible {
+    outline-offset: -3px;
+    border-radius: 0;
+    z-index: 1
+}
+
+.tm-cell[aria-pressed="true"] {
+    box-shadow: inset 0 0 0 3px var(--ink);
+    z-index: 1
+}
+
+.tm-detail:not(:empty) {
+    border-top: 1px solid var(--line);
+    margin-top: 14px;
+    padding-top: 14px
+}
+
+.tm-detail h3 {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--ink);
+    margin: 0 0 10px
+}
+
+.tm-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 340px;
+    overflow-y: auto
+}
+
+.tm-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 0;
+    border-top: 1px solid var(--line)
+}
+
+.tm-list li:first-child {
+    border-top: 0
+}
+
+.st-stars {
+    display: inline-flex;
+    flex: none
+}
+
+.st-stars svg {
+    width: 15px;
+    height: 15px;
+    fill: var(--unheard)
+}
+
+.st-stars svg.on {
+    fill: var(--c)
+}
+
+/* Rating activity: one column per month */
+.st-colchart {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 180px;
+    padding-top: 4px
+}
+
+.st-col {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 3px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums
+}
+
+.st-bar {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 2px;
+    /* room for the count over the tallest column */
+    padding-top: 18px
+}
+
+.st-col i {
+    display: block;
+    width: 100%;
+    max-width: 34px;
+    min-height: 2px;
+    border-radius: 4px 4px 0 0;
+    background: var(--accent);
+    transition: height .3s ease
+}
+
+.st-col>span:last-child {
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.2;
+    height: 2.4em
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .st-track i,
+    .st-col i {
+        transition: none
+    }
+}
+
+@media (max-width: 820px) {
+
+    .st-cols,
+    .st-pair {
+        grid-template-columns: minmax(0, 1fr)
+    }
+
+    .treemap {
+        height: 380px
+    }
+}
+
+@media (max-width: 480px) {
+    .st-tiles {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px
+    }
+
+    .st-tile b {
+        font-size: 22px
+    }
+
+    .treemap {
+        height: 340px
+    }
+
+    .st-col small {
+        display: none
+    }
+
+    /* title above the switch, the switch full width */
+    .st-card-head {
+        flex-direction: column;
+        align-items: stretch
+    }
+
+    .st-card-head .seg button {
+        flex: 1
+    }
+
+    /* the average and count say it; the names need the room */
+    .st-rank li {
+        grid-template-columns: 20px minmax(0, 1fr) auto
+    }
+
+    .st-rank .st-track {
+        display: none
+    }
+}

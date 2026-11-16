@@ -11,10 +11,12 @@ import { toast } from './toast';
 import type { Source, Track } from './types';
 import { $, LS, ago, esc, plural } from './util';
 
-type Screen = 'setup' | 'picker' | 'work';
+type Screen = 'setup' | 'picker' | 'work' | 'stats';
 
 export function show(which: Screen): void {
-    for (const id of ['setup', 'picker', 'work'] as const) $('#' + id).hidden = id !== which;
+    for (const id of ['setup', 'picker', 'work', 'stats'] as const) $('#' + id).hidden = id !== which;
+    $('#statsBtn').hidden = which !== 'picker' && which !== 'work';
+    $('#statsBack').hidden = which !== 'stats';
     $('#menuWrap').hidden = which === 'setup';
     $('#switchBtn').hidden = which !== 'work';
     $('#cullBtn').hidden = which !== 'work';

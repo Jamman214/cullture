@@ -61,6 +61,30 @@ export async function saveCached(src: Source, tracks: Track[]): Promise<void> {
     } catch { /* not cached */ }
 }
 
+/**
+ * Songs removed by culling are kept in their own record, so stats still know their details after
+ * they leave the playlist's copy. Not a playlist: it has no cacheMeta, so loadCached never returns it.
+ */
+const REMOVED = 'removed';
+
+export async function saveRemoved(tracks: Track[]): Promise<void> {
+    if (!tracks.length) return;
+    try {
+        const old = await run<{ tracks: Track[] } | undefined>('readonly', s => s.get(REMOVED));
+        const byId = new Map([...(old?.tracks ?? []), ...tracks].map(t => [t.id, t]));
+        await run('readwrite', s => s.put({ id: REMOVED, tracks: [...byId.values()] }));
+    } catch { /* stats just won't have these songs' details */ }
+}
+
+/** Every saved song, from every playlist's copy and the removed songs; the same song may appear more than once. */
+export async function loadAllCached(): Promise<Track[]> {
+    try {
+        return (await run<{ tracks: Track[] }[]>('readonly', s => s.getAll())).flatMap(r => r.tracks);
+    } catch {
+        return [];
+    }
+}
+
 /** True when Spotify reports the playlist has changed since it was saved. */
 export function isStale(src: Source): boolean {
     const m = cacheMeta(src.id);

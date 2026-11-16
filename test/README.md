@@ -16,6 +16,7 @@ npm run test:watch   # re-run as you edit
 | `api.test.ts` | The Web API client: signing in again on 401, waiting on 429, retrying server errors |
 | `spotify.test.ts` | Loading songs and playlists: paging, and skipping local files, episodes and duplicates |
 | `cull.test.ts` | Importing ratings: which rating wins, merging tags |
+| `stats.test.ts` | The stats screen's numbers: counts, artists and albums, decades, months, top lists, the treemap layout, rating colours |
 | `cache.test.ts` | Spotting playlists that changed on Spotify since they were saved |
 | `tags.test.ts`, `util.test.ts` | Tags and their filter states; small helpers |
 

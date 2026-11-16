@@ -1,14 +1,15 @@
 # UI structure and rendering
 
-The page is one HTML file with three screens, and `show()` in `views.ts` displays one at a time by toggling `hidden`.
+The page is one HTML file with four screens, and `show()` in `views.ts` displays one at a time by toggling `hidden`.
 
 | Screen | Element | Shown when | Also shown |
 | --- | --- | --- | --- |
 | Setup | `#setup` | No Client ID or not signed in | — |
-| Picker | `#picker` | Signed in, choosing a playlist | ⋯ menu |
-| Workspace | `#work` | A playlist is open | Change playlist, Cull…, ⋯ menu, player bar |
+| Picker | `#picker` | Signed in, choosing a playlist | Stats, ⋯ menu |
+| Workspace | `#work` | A playlist is open | Change playlist, Stats, Cull…, ⋯ menu, player bar |
+| Stats | `#stats` | Stats was pressed on the picker or workspace | Back, ⋯ menu |
 
-The workspace stacks, top to bottom: the summary (title, counts, Resume button, progress bar), the sticky filter row, and the song list. The player bar is fixed to the bottom of the window. When songs are selected, the selection bar slides up just above the player bar. It floats over the list rather than sitting in the page, so selecting never moves the rows. CSS variables `--deck-h` and `--bulk-space`, kept up to date by `updateBarSpace` in `list.ts`, give the list and toasts room for both bars. Four dialogs sit outside the screens: Cull, confirm, device choice, and a toast for messages.
+The workspace stacks, top to bottom: the summary (title, counts, Resume button, progress bar), the sticky filter row, and the song list. The player bar is fixed to the bottom of the window. When songs are selected, the selection bar slides up just above the player bar. It floats over the list rather than sitting in the page, so selecting never moves the rows. CSS variables `--deck-h` and `--bulk-space`, kept up to date by `updateBarSpace` in `list.ts`, give the list and toasts room for both bars. The stats screen ([dashboard.md](dashboard.md)) hides the player bar like the picker does; playback carries on, and Back restores the song list exactly as it was, scroll position included. Four dialogs sit outside the screens: Cull, confirm, device choice, and a toast for messages.
 
 ## Static and generated HTML
 
@@ -26,6 +27,7 @@ The workspace stacks, top to bottom: the summary (title, counts, Resume button, 
 | Star buttons | `starsHtml` | util.ts |
 | Tag icons in rows and the player bar | `tagsHtml` | tags.ts |
 | Notifications | `toast` | toast.ts |
+| Stats screen: tiles, charts, treemap, artist details | `renderStats`, `drawTreemap`, `pickArtist` | dashboard.ts |
 
 ## Rendering strategy
 

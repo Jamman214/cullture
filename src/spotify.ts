@@ -52,9 +52,13 @@ export async function getTracks(src: Source, onProgress?: (loaded: number, total
             if (!t || !t.id || t.is_local || (t.type && t.type !== 'track') || seen.has(t.id)) continue;
             seen.add(t.id);
             const imgs = t.album?.images || [];
+            const names = (t.artists || []).map(a => a.name);
+            const year = Number(t.album?.release_date?.slice(0, 4));
             out.push({
                 id: t.id, uri: t.uri, name: t.name,
-                artists: (t.artists || []).map(a => a.name).join(', '),
+                artists: names.join(', '),
+                artistList: names,
+                ...(year ? { year } : {}),
                 album: t.album?.name || '',
                 img: (imgs[imgs.length - 1] || imgs[0])?.url || '',
                 big: imgs[0]?.url || '',

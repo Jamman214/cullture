@@ -12,6 +12,9 @@ export interface Track {
     dur: number;
     added: string;
     idx: number;
+    /** Release year of the album, and the artist names one by one. Missing from songs saved before they were added. */
+    year?: number;
+    artistList?: string[];
 }
 
 /** A playlist or Liked Songs, as shown on the picker screen. */
@@ -92,7 +95,7 @@ export interface SpotifyTrack {
     is_local?: boolean;
     duration_ms: number;
     artists?: { name: string }[];
-    album?: { name: string; images?: SpotifyImage[] };
+    album?: { name: string; images?: SpotifyImage[]; release_date?: string };
 }
 /** Playlist items use `item` since Feb 2026; Liked Songs and older responses use `track`. */
 export interface SpotifyListItem {
