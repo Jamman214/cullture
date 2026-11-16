@@ -204,16 +204,20 @@ export function artistCover(songs: Song[], name: string): { album: string; img: 
 }
 
 /**
- * What a w×h px treemap tile has room for: the name and rating at 13px; else only the rating,
- * as large as fits up to 13px and no smaller than 8px, as "4.2★", then "4.2", then "4"; else null.
- * The em widths are rough glyph widths plus the pill's padding.
+ * What a w×h px treemap tile has room for, and where: at 13px the name top left with the rating in the
+ * bottom-right corner, either below the name ('stack') or on the same line, the name cut short before it ('row');
+ * else only the rating in that corner ('corner'), as large as fits up to 13px and no smaller than 8px;
+ * else the rating filling the tile ('fit'), as "4.2", then the rounded "4"; null when nothing fits.
+ * The em widths are rough bold glyph widths plus the pill's padding, less of it when filling the tile.
  */
-export function tileLabel(w: number, h: number, avg: number): { name: boolean; text: string; px: number } | null {
+export function tileLabel(w: number, h: number, avg: number): { pos: 'stack' | 'row' | 'corner' | 'fit'; text: string; px: number } | null {
     const a = avg.toFixed(1);
-    if (w >= 64 && h >= 38) return { name: true, text: `${a}★`, px: 13 };
-    for (const [text, em] of [[`${a}★`, 2.9], [a, 2], [String(Math.round(avg)), 1.1]] as const) {
-        const px = Math.floor(Math.min(13, (w - 2) / em, (h - 2) / 1.4));
-        if (px >= 8) return { name: false, text, px };
+    if (w >= 64 && h >= 44) return { pos: 'stack', text: a, px: 13 };
+    if (w >= 84 && h >= 26) return { pos: 'row', text: a, px: 13 };
+    // [where, text, px of inset, em wide]
+    for (const [pos, text, inset, em] of [['corner', a, 8, 2.3], ['fit', a, 2, 1.9], ['fit', String(Math.round(avg)), 2, .9]] as const) {
+        const px = Math.floor(Math.min(13, (w - inset) / em, (h - inset) / 1.4));
+        if (px >= 8) return { pos, text, px };
     }
     return null;
 }

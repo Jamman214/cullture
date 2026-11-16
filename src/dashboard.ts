@@ -235,27 +235,65 @@ function rankHtml(gs: Group[], by: RankBy, sts: string[]): string {
 <span class="st-val">${avgText(g.avg)} <small>${plural(g.n, 'song')}</small></span></li>`).join('')}</ol>`;
 }
 
+/** The box size the treemap was last laid out for, so a resize that doesn't change it is skipped. */
+let laid = '';
+let frame = 0;
+/** One observer for the screen's life, re-pointed at each new treemap; re-lays it out at most once a frame. */
+let watch: ResizeObserver | null = null;
+
+/** Builds one tile per artist (in size order, as laid out), then lays them out for the box's size. */
 function drawTreemap(box: HTMLElement, artists: Group[]): void {
     tip(null);
-    const W = box.clientWidth, H = box.clientHeight;
     const sts = stops();
     const songs = cur?.songs ?? [];
     const ids = artistIdsByName(songs);
-    // Laid out in pixels so rectangles come out near square, then placed in percent so a resize only stretches them.
-    box.innerHTML = treemap(artists.map(a => a.n), W, H).map(({ i, x, y, w, h }) => {
-        const a = artists[i];
+    box.innerHTML = artists.map(a => {
         const rgb = ratingColor(sts, a.avg);
         const c = artistCover(songs, a.name);
-        const id = ids.get(a.name) ?? '';
-        // Spotify's small cover is 64px, so larger tiles (in device pixels) take the big one.
-        const src = photoTiles ? photos[id] || (Math.max(w, h) * devicePixelRatio > 64 ? c.big : c.img) : '';
-        const l = tileLabel(w, h, a.avg);
         const label = `${a.name}: ${plural(a.n, 'rated song')}, average ${a.avg.toFixed(1)} stars${c.album ? `, best album ${c.album}` : ''}`;
-        return `<button class="tm-cell${l && !l.name ? ' only' : ''}${src ? ' pic' : ''}" data-a="${esc(a.name)}" data-id="${esc(id)}" data-al="${esc(c.album)}"
-aria-pressed="${a.name === picked}" aria-controls="tmDetail" aria-label="${esc(label)}"
-style="left:${(x / W) * 100}%;top:${(y / H) * 100}%;width:${(w / W) * 100}%;height:${(h / H) * 100}%;--c:${fill(rgb)};--t:${darkText(rgb) ? '#1D1A2C' : '#fff'}${l ? `;font-size:${l.px}px` : ''}">${src ? `<img src="${esc(src)}" alt="" loading="lazy" decoding="async">` : ''}${l?.name ? `<b>${esc(a.name)}</b>` : ''}${l ? `<span>${l.text}</span>` : ''}</button>`;
+        return `<button class="tm-cell" data-a="${esc(a.name)}" data-id="${esc(ids.get(a.name) ?? '')}" data-al="${esc(c.album)}" data-img="${esc(c.img)}" data-big="${esc(c.big)}"
+aria-pressed="${a.name === picked}" aria-controls="tmDetail" aria-label="${esc(label)}" style="--c:${fill(rgb)};--t:${darkText(rgb) ? '#1D1A2C' : '#fff'}"></button>`;
     }).join('');
+    layoutTreemap(box, artists);
+    watch ??= new ResizeObserver(() => { cancelAnimationFrame(frame); frame = requestAnimationFrame(relayout); });
+    watch.disconnect();
+    watch.observe(box);
     if (photoTiles) loadPhotos([...box.querySelectorAll<HTMLElement>('.tm-cell')].map(b => b.dataset.id ?? ''));
+}
+
+/**
+ * Places the tiles drawn by drawTreemap for the box's current size, in place: laid out in pixels so rectangles
+ * come out near square, placed in percent, and labelled for their size. Selection, focus and loaded images stay.
+ */
+function layoutTreemap(box: HTMLElement, artists: Group[]): void {
+    const W = box.clientWidth, H = box.clientHeight;
+    laid = `${W}x${H}`;
+    const cells = box.children as HTMLCollectionOf<HTMLElement>;
+    for (const { i, x, y, w, h } of treemap(artists.map(a => a.n), W, H)) {
+        const b = cells[i], a = artists[i];
+        const l = tileLabel(w, h, a.avg);
+        Object.assign(b.style, { left: `${(x / W) * 100}%`, top: `${(y / H) * 100}%`, width: `${(w / W) * 100}%`, height: `${(h / H) * 100}%`, fontSize: l ? `${l.px}px` : '' });
+        b.classList.remove('stack', 'row', 'corner', 'fit');
+        if (l) b.classList.add(l.pos);
+        b.querySelectorAll('b, span').forEach(e => e.remove());
+        if (l) b.insertAdjacentHTML('beforeend', `${l.pos === 'stack' || l.pos === 'row' ? `<b>${esc(a.name)}</b>` : ''}<span>${l.text}</span>`);
+        // Spotify's small cover is 64px, so larger tiles (in device pixels) take the big one.
+        const src = photoTiles ? photos[b.dataset.id ?? ''] || (Math.max(w, h) * devicePixelRatio > 64 ? b.dataset.big : b.dataset.img) || '' : '';
+        let img = b.querySelector('img');
+        if (src && img?.getAttribute('src') !== src) {
+            img ??= b.insertAdjacentElement('afterbegin', Object.assign(document.createElement('img'), { alt: '', loading: 'lazy', decoding: 'async' })) as HTMLImageElement;
+            img.src = src;
+        }
+        b.classList.toggle('pic', !!src);
+    }
+}
+
+/** Re-lays out the treemap when its box changed size; nothing while the screen is hidden (0×0). */
+function relayout(): void {
+    const box = document.getElementById('treemap');
+    if (!box || !cur || !box.clientWidth || !box.clientHeight || `${box.clientWidth}x${box.clientHeight}` === laid) return;
+    layoutTreemap(box, cur.artists.slice(0, TREEMAP_MAX));
+    placeTip();
 }
 
 /** Asks Spotify for the photos of drawn artists not yet known, swapping each into its tile as it arrives. */

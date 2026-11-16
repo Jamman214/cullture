@@ -118,7 +118,18 @@ describe('artistCover', () => { const songs = (...xs: [string, number, string][]
     });
 });
 
-describe('tileLabel', () => { it('shows the name when it fits, else shrinks the rating, then drops the star, then the decimal', () => { expect(tileLabel(100, 50, 4.24)).toEqual({ name: true, text: '4.2★', px: 13 }); expect(tileLabel(40, 30, 4.24)).toEqual({ name: false, text: '4.2★', px: 13 }); expect(tileLabel(28, 30, 4.24)).toEqual({ name: false, text: '4.2★', px: 8 }); expect(tileLabel(20, 30, 4.24)).toEqual({ name: false, text: '4.2', px: 9 }); expect(tileLabel(12, 30, 4.6)).toEqual({ name: false, text: '5', px: 9 }); expect(tileLabel(60, 10, 4.6)).toBeNull(); }); }); 
+describe('tileLabel', () => {
+    it('puts the name top left and the rating, without a star, in the corner; then only the rating; then fills the tile, dropping the decimal last', () => {
+        expect(tileLabel(100, 50, 4.24)).toEqual({ pos: 'stack', text: '4.2', px: 13 });
+        expect(tileLabel(120, 30, 4.24)).toEqual({ pos: 'row', text: '4.2', px: 13 });
+        expect(tileLabel(70, 30, 4.24)).toEqual({ pos: 'corner', text: '4.2', px: 13 });
+        expect(tileLabel(30, 30, 4.24)).toEqual({ pos: 'corner', text: '4.2', px: 9 });
+        expect(tileLabel(22, 30, 4.24)).toEqual({ pos: 'fit', text: '4.2', px: 10 });
+        expect(tileLabel(14, 30, 4.6)).toEqual({ pos: 'fit', text: '5', px: 13 });
+        expect(tileLabel(10, 30, 4.6)).toEqual({ pos: 'fit', text: '5', px: 8 });
+        expect(tileLabel(60, 10, 4.6)).toBeNull();
+    });
+});
 describe('treemap', () => {
     const W = 800, H = 450;
     const cases = [[1], [5, 3, 1], [6, 6, 4, 3, 2, 2, 1], Array.from({ length: 60 }, (_, i) => 1 + ((i * 37) % 23)), [1, 1, 1, 1]];

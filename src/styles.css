@@ -1899,15 +1899,32 @@ dialog .row-actions {
     white-space: nowrap
 }
 
+/* The rating: small, in the bottom-right corner, so the middle of the tile stays clear */
 .tm-cell span {
-    white-space: nowrap
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    padding: .05em .35em;
+    border-radius: 999px;
+    white-space: nowrap;
+    font-weight: 700
 }
 
-/* Only the rating fits: centred, sized by drawTreemap */
-.tm-cell.only {
+/* Name and rating on one line: the name stops short of the rating */
+.tm-cell.row b {
+    max-width: calc(100% - 2.5em)
+}
+
+/* Tiles too small for a corner: the rating fills the tile */
+.tm-cell.fit {
     padding: 0;
     align-items: center;
     justify-content: center
+}
+
+.tm-cell.fit span {
+    position: static;
+    padding: 0 .15em
 }
 
 .tm-cell:hover {
@@ -1918,7 +1935,7 @@ dialog .row-actions {
     filter: brightness(.92)
 }
 
-/* Photos: the picture under a scrim darkest at the top left, where the text sits */
+/* Photos: the picture clear, with a short shade behind the name only */
 .tm-cell img {
     position: absolute;
     inset: 0;
@@ -1928,37 +1945,25 @@ dialog .row-actions {
     z-index: -1
 }
 
-.tm-cell.pic::after {
+.tm-cell.pic:is(.stack, .row)::after {
     content: "";
     position: absolute;
-    inset: 0;
+    inset: 0 0 auto;
+    height: 2.4em;
     z-index: -1;
-    background: linear-gradient(160deg, rgb(0 0 0 / .72), rgb(0 0 0 / .35) 45%, rgb(0 0 0 / .08))
+    background: linear-gradient(rgb(0 0 0 / .62), rgb(0 0 0 / .3) 60%, transparent)
 }
 
-.tm-cell.pic.only::after {
-    background: rgb(0 0 0 / .3)
-}
-
-.tm-cell.pic b,
-.tm-cell.pic span {
+.tm-cell.pic b {
     color: #fff;
-    text-shadow: 0 1px 2px rgb(0 0 0 / .8)
+    text-shadow: 0 1px 2px rgb(0 0 0 / .85), 0 0 4px rgb(0 0 0 / .5)
 }
 
 /* The rating keeps its colour as a pill */
 .tm-cell.pic span {
-    margin-top: 2px;
-    padding: .05em .35em;
-    border-radius: 999px;
     background: var(--c);
     color: var(--t);
-    text-shadow: none;
-    font-weight: 700
-}
-
-.tm-cell.pic.only span {
-    margin: 0
+    box-shadow: 0 1px 2px rgb(0 0 0 / .35)
 }
 
 /* The selected ring over the picture */
